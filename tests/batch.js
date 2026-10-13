@@ -95,7 +95,7 @@ const scenarios = {
     }
     if (name === "stop") {
       await p.waitForFunction(
-        () => /% done/.test(document.getElementById("liveSub").textContent) && S.places > 0,
+        () => /% done/.test(document.getElementById("liveSub").textContent) && searchStats.places > 0,
       );
       console.log("  card:", await p.textContent("#liveSub"));
       await p.screenshot({ path: require("path").join(__dirname, "../dist/screens/k1.png") });
@@ -109,8 +109,8 @@ const scenarios = {
     const o = await p.evaluate(() => ({
       now: document.getElementById("now").textContent,
       n: results.length,
-      places: S.places,
-      skipped: S.skipped,
+      places: searchStats.places,
+      skipped: searchStats.skipped,
       cc: results
         .map(r => r.poi.cc)
         .sort()

@@ -727,9 +727,9 @@ const done = page =>
     await page.click("#go");
     await done(page);
     const st = await page.evaluate(() => ({
-      places: S.places,
+      places: searchStats.places,
       n: results.length,
-      failed: S.failed,
+      failed: searchStats.failed,
       cc: results.map(r => r.poi.cc),
       date: results.map(r => r.date),
     }));

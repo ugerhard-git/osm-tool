@@ -76,7 +76,13 @@ async function run(b, name, { places, rest, js, check }) {
     });
     return {
       found: results.map(r => r.poi.name + "=" + r.panoId),
-      S: { rescued: S.rescued, unofficial: S.unofficial, failed: S.failed, why: S.failWhy, none: S.none },
+      S: {
+        rescued: searchStats.rescued,
+        unofficial: searchStats.unofficial,
+        failed: searchStats.failed,
+        why: searchStats.failWhy,
+        none: searchStats.none,
+      },
       via: officialVia,
       js: window.__js || [],
       pops,

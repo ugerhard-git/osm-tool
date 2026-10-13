@@ -105,8 +105,8 @@ const COUNTRY_WEIGHT = {
   IR: 2,
   EG: 2,
 };
-const cw = c => COUNTRY_WEIGHT[c] || 1;
-const weigh = codes => codes.reduce((n, c) => n + cw(c), 0);
+const countryWeight = c => COUNTRY_WEIGHT[c] || 1;
+const weightOf = codes => codes.reduce((n, c) => n + countryWeight(c), 0);
 const TOO_MANY = 150000; // above this many places worldwide, the user must choose countries
 const MIN_USES = 3; // live tag suggestions used fewer times than this are hidden
 const MAX_DOTS = 4000; // faint candidate dots drawn on the map
@@ -165,18 +165,19 @@ for (const c of [...COVERAGE]) if (!CODES.includes(c)) COVERAGE.delete(c);
 const COUNTRIES = CODES.map(c => ({ code: c, name: countryName(c) })).sort((a, b) =>
   a.name.localeCompare(b.name),
 );
-const rad = d => (d * Math.PI) / 180;
+const toRadians = d => (d * Math.PI) / 180;
 function distance(aLat, aLng, bLat, bLng) {
-  const dLat = rad(bLat - aLat),
-    dLng = rad(bLng - aLng);
-  const h = Math.sin(dLat / 2) ** 2 + Math.cos(rad(aLat)) * Math.cos(rad(bLat)) * Math.sin(dLng / 2) ** 2;
+  const dLat = toRadians(bLat - aLat),
+    dLng = toRadians(bLng - aLng);
+  const h =
+    Math.sin(dLat / 2) ** 2 + Math.cos(toRadians(aLat)) * Math.cos(toRadians(bLat)) * Math.sin(dLng / 2) ** 2;
   return 6371008.8 * 2 * Math.asin(Math.min(1, Math.sqrt(h)));
 }
 function bearing(aLat, aLng, bLat, bLng) {
-  const y = Math.sin(rad(bLng - aLng)) * Math.cos(rad(bLat));
+  const y = Math.sin(toRadians(bLng - aLng)) * Math.cos(toRadians(bLat));
   const x =
-    Math.cos(rad(aLat)) * Math.sin(rad(bLat)) -
-    Math.sin(rad(aLat)) * Math.cos(rad(bLat)) * Math.cos(rad(bLng - aLng));
+    Math.cos(toRadians(aLat)) * Math.sin(toRadians(bLat)) -
+    Math.sin(toRadians(aLat)) * Math.cos(toRadians(bLat)) * Math.cos(toRadians(bLng - aLng));
   return ((Math.atan2(y, x) * 180) / Math.PI + 360) % 360;
 }
 function shuffle(a) {
@@ -191,9 +192,9 @@ const esc = s =>
     /[&<>"'`]/g,
     c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;", "`": "&#96;" })[c],
   );
-const text = (v, max = 200) => (typeof v === "string" ? v.slice(0, max) : "");
-const finite = (n, lo, hi) => typeof n === "number" && Number.isFinite(n) && n >= lo && n <= hi;
-const norm = s => s.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
+const cleanText = (v, max = 200) => (typeof v === "string" ? v.slice(0, max) : "");
+const inRange = (n, lo, hi) => typeof n === "number" && Number.isFinite(n) && n >= lo && n <= hi;
+const foldAccents = s => s.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
 
 /* "key=value, key2=a|b, key3=*" -> list of {key, values|null}. Throws a readable message. */
 function parseTags(text) {
@@ -220,7 +221,7 @@ function parseTags(text) {
     };
   });
 }
-const q = s => '"' + s.replace(/\\/g, "\\\\").replace(/"/g, '\\"') + '"';
+const quoteOql = s => '"' + s.replace(/\\/g, "\\\\").replace(/"/g, '\\"') + '"';
 const nameWords = () =>
   $("nameHas")
     .value.split(/[,|\n]/)
@@ -232,7 +233,7 @@ function nameFilter() {
   if (!w.length) return "";
   const short = w.find(x => x.length < 3);
   if (short) throw new Error(`"${short}" is too short for a name search. Use three letters or more.`);
-  return `["name"~${q(w.map(x => x.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|"))},i]`;
+  return `["name"~${quoteOql(w.map(x => x.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|"))},i]`;
 }
 function searchLabel() {
   const w = nameWords(),
@@ -242,10 +243,10 @@ function searchLabel() {
 function tagFilter(text) {
   return parseTags(text)
     .map(({ key, values }) => {
-      if (!values) return `[${q(key)}]`;
+      if (!values) return `[${quoteOql(key)}]`;
       if (values.length > 1)
-        return `[${q(key)}~${q("^(" + values.map(v => v.replace(/[.*+?^${}()[\]\\]/g, "\\$&")).join("|") + ")$")}]`;
-      return `[${q(key)}=${q(values[0])}]`;
+        return `[${quoteOql(key)}~${quoteOql("^(" + values.map(v => v.replace(/[.*+?^${}()[\]\\]/g, "\\$&")).join("|") + ")$")}]`;
+      return `[${quoteOql(key)}=${quoteOql(values[0])}]`;
     })
     .join("");
 }
@@ -269,7 +270,7 @@ function index(l) {
   if (!Object.hasOwn(LANGS, l)) l = "en";
   return (indexCache[l] ??= CAT[l].map((s, i) => {
     const parts = (s || CAT.en[i]).split("\t");
-    return { name: parts[0], n: norm(parts[0]), terms: parts.slice(1).map(norm) };
+    return { name: parts[0], n: foldAccents(parts[0]), terms: parts.slice(1).map(foldAccents) };
   }));
 }
 const catName = tag => {
@@ -287,7 +288,7 @@ function scoreEntry(e, q) {
   return -1;
 }
 function searchCatalogue(text, limit = 8) {
-  const q = norm(text.trim());
+  const q = foldAccents(text.trim());
   if (q.length < 2) return [];
   const main = index(lang),
     en = lang === "en" ? null : index("en"),
@@ -317,7 +318,7 @@ function searchCatalogue(text, limit = 8) {
 const JUNK_KEY =
   /^(name|addr|source|note|description|ref|operator|brand|network|website|url|contact|wikipedia|wikidata|is_in|destination|fixme|comment|image|email|phone|opening_hours|created_by|tiger|gnis|nhd|import|start_date|type|layer|surface|access|service)\b|name$|:name|^.*:(source|ref|note)$/i;
 const SAFE_KEY = /^[A-Za-z0-9_:.-]{1,60}$/;
-const pretty = v => {
+const tagValueLabel = v => {
   const s = v.replace(/_/g, " ");
   return s.charAt(0).toUpperCase() + s.slice(1);
 };
@@ -347,7 +348,7 @@ async function taginfoSearch(text, signal) {
         Number(d.count_all) >= MIN_USES,
     )
     .map(d => ({
-      label: pretty(d.value),
+      label: tagValueLabel(d.value),
       tag: `${d.key}=${d.value}`,
       count: Math.floor(Number(d.count_all)),
     }));
@@ -361,7 +362,7 @@ async function taginfoSearch(text, signal) {
         Number(d.count_all) >= MIN_USES,
     )
     .map(d => ({
-      label: pretty(d.key.replace(/:/g, " ")) + " (any value)",
+      label: tagValueLabel(d.key.replace(/:/g, " ")) + " (any value)",
       tag: `${d.key}=*`,
       count: Math.floor(Number(d.count_all)),
     }));
@@ -376,7 +377,7 @@ async function countPart({ key, values }) {
         : `${TAGINFO}tag/stats?key=${encodeURIComponent(key)}&value=${encodeURIComponent(v)}`;
     const j = await (await fetch(u)).json();
     const all = (Array.isArray(j.data) ? j.data : []).find(d => d && d.type === "all");
-    if (!all || !finite(all.count, 0, 1e11)) throw new Error("no count");
+    if (!all || !inRange(all.count, 0, 1e11)) throw new Error("no count");
     return all.count;
   };
   const counts = await Promise.all((values || [null]).map(one));
@@ -712,7 +713,7 @@ function suggestName() {
           : selected.size <= 2
             ? [...selected].map(countryName).join(" and ")
             : selected.size + " countries";
-  if (own) {
+  if (ownResult) {
     $("mapName").placeholder = ownLabel();
     return;
   }
@@ -929,9 +930,9 @@ $("srvRemember").onchange = srvResave;
 }
 
 /* ---------- your own Overpass result: state ---------- */
-let own = null; // { places, noPosition, lines, worked, hasCc, countries, source }
+let ownResult = null; // { places, noPosition, lines, worked, hasCc, countries, source }
 function updateCountryTag() {
-  const off = own ? !own.hasCc : scope() === "world";
+  const off = ownResult ? !ownResult.hasCc : scope() === "world";
   $("tagCountry").disabled = off;
   $("tagCountryRow").classList.toggle("off", off);
   const h = $("tagCountryHint");
@@ -940,13 +941,13 @@ function updateCountryTag() {
     h.textContent = "";
     h.append(
       document.createElement("br"),
-      own
+      ownResult
         ? "Not available: this result does not say which country each place is in."
         : 'Not available with "Whole world", which does not know the country of a place.',
     );
   }
 }
-const lastStep = () => (own ? 2 : 3);
+const lastStep = () => (ownResult ? 2 : 3);
 function emptyText(title, body) {
   const e = $("empty");
   e.textContent = "";
@@ -956,39 +957,39 @@ function emptyText(title, body) {
 }
 function renderOwn() {
   $("lastStepNo").textContent = lastStep();
-  if (own)
+  if (ownResult)
     emptyText("Your places are loaded", 'Check the settings on the left, then select "Find locations".');
   else emptyText("Nothing found yet", 'Choose a kind of place and select "Find locations".');
-  $("ownStep").hidden = !own;
-  $("stepKind").hidden = !!own;
-  $("stepWhere").hidden = !!own;
+  $("ownStep").hidden = !ownResult;
+  $("stepKind").hidden = !!ownResult;
+  $("stepWhere").hidden = !!ownResult;
   renderAgain();
-  $("share").hidden = !!own;
-  if (own) {
+  $("share").hidden = !!ownResult;
+  if (ownResult) {
     const el = $("ownSummary");
     el.textContent = "";
     const b = document.createElement("b");
-    b.textContent = `${fmt(own.places.length)} ${own.places.length === 1 ? "place" : "places"} from ${own.source}`;
+    b.textContent = `${fmt(ownResult.places.length)} ${ownResult.places.length === 1 ? "place" : "places"} from ${ownResult.source}`;
     el.append(b);
     const lines = [];
     lines.push(
-      own.hasCc
-        ? `Country known for places in ${fmt(own.countries)} ${own.countries === 1 ? "country" : "countries"}.`
+      ownResult.hasCc
+        ? `Country known for places in ${fmt(ownResult.countries)} ${ownResult.countries === 1 ? "country" : "countries"}.`
         : "No country information in this result, so locations get no country code.",
     );
-    if (own.worked)
+    if (ownResult.worked)
       lines.push(
-        `${fmt(own.worked)} ${own.worked === 1 ? "outline has" : "outlines have"} no centre in the file; the middle of ${own.worked === 1 ? "its" : "their"} shape is used.`,
+        `${fmt(ownResult.worked)} ${ownResult.worked === 1 ? "outline has" : "outlines have"} no centre in the file; the middle of ${ownResult.worked === 1 ? "its" : "their"} shape is used.`,
       );
-    if (own.noPosition)
+    if (ownResult.noPosition)
       lines.push(
-        `${fmt(own.noPosition)} ${own.noPosition === 1 ? "object was" : "objects were"} skipped because ${own.noPosition === 1 ? "it has" : "they have"} no position. End the query with "out center;" to include ${own.noPosition === 1 ? "it" : "them"}.`,
+        `${fmt(ownResult.noPosition)} ${ownResult.noPosition === 1 ? "object was" : "objects were"} skipped because ${ownResult.noPosition === 1 ? "it has" : "they have"} no position. End the query with "out center;" to include ${ownResult.noPosition === 1 ? "it" : "them"}.`,
       );
-    if (own.lines)
+    if (ownResult.lines)
       lines.push(
-        `${fmt(own.lines)} ${own.lines === 1 ? "is a line" : "are lines"} such as a road or river. Locations will face the middle of the line.`,
+        `${fmt(ownResult.lines)} ${ownResult.lines === 1 ? "is a line" : "are lines"} such as a road or river. Locations will face the middle of the line.`,
       );
-    if (own.places.length > OWN_MANY)
+    if (ownResult.places.length > OWN_MANY)
       lines.push(
         'That is a very large number of places. Checking them all takes a long time; "Locations wanted" stops the search earlier.',
       );
@@ -1004,7 +1005,7 @@ function loadOwn(raw, source) {
   err.hidden = true;
   if (running) return;
   try {
-    own = { ...parseOwn(raw), source };
+    ownResult = { ...parseOwn(raw), source };
     if (!$("ownLabel").value.trim())
       $("ownLabel").value = /\.\w+$/.test(source)
         ? source
@@ -1038,7 +1039,7 @@ async function loadOwnFile(file) {
     err.hidden = false;
     return;
   }
-  loadOwn(raw, text(file.name, 80) || "your file");
+  loadOwn(raw, cleanText(file.name, 80) || "your file");
 }
 $("ownFile").onchange = e => {
   loadOwnFile(e.target.files[0]);
@@ -1046,7 +1047,7 @@ $("ownFile").onchange = e => {
 };
 $("ownUse").onclick = () => loadOwn($("ownText").value, "pasted text");
 $("ownRemove").onclick = () => {
-  own = null;
+  ownResult = null;
   renderOwn();
   renderScope();
   renderPicked();
@@ -1113,7 +1114,7 @@ function applyLink() {
     const v = Math.round(Number(q.get(key)));
     if (q.has(key) && Number.isFinite(v)) $(id).value = Math.min(hi, Math.max(lo, v));
   };
-  const k = text(q.get("k"), 300).trim();
+  const k = cleanText(q.get("k"), 300).trim();
   kind = null;
   kindEl.value = "";
   if (k) {
@@ -1124,13 +1125,13 @@ function applyLink() {
       kindEl.value = name || k;
     } catch {}
   }
-  $("nameHas").value = text(q.get("n"), 200);
+  $("nameHas").value = cleanText(q.get("n"), 200);
   const s = q.get("s");
   if (["cov", "pick", "world"].includes(s))
     document.querySelector(`input[name=scope][value=${s}]`).checked = true;
   if (q.has("c")) {
     selected.clear();
-    for (const c of text(q.get("c"), 1200).split(/[-,]/)) if (CODES.includes(c)) selected.add(c);
+    for (const c of cleanText(q.get("c"), 1200).split(/[-,]/)) if (CODES.includes(c)) selected.add(c);
   }
   num("d", 5, 2000, "maxDist");
   num("m", 0, 1000, "minDist");
@@ -1141,12 +1142,12 @@ function applyLink() {
   $("tagCountry").checked = q.get("gc") !== "0";
   $("tagName").checked = q.get("gn") === "1";
   $("tagRoad").checked = q.get("gr") === "1";
-  $("mapName").value = text(q.get("name"), 100);
+  $("mapName").value = cleanText(q.get("name"), 100);
   return true;
 }
 $("share").onclick = async () => {
   const b = $("share");
-  if (own) return;
+  if (ownResult) return;
   if (!kind && !nameWords().length)
     return show(
       "error",
@@ -1175,7 +1176,7 @@ $("form").addEventListener("change", e => {
 /* Apply the shared link again. Browsers can restore earlier form values while the page loads, and the
    first-visit welcome sits on top of the page; this makes sure the link's settings are what the visitor sees. */
 function reapplyLink() {
-  if (!fromLink || formTouched || running || own) return;
+  if (!fromLink || formTouched || running || ownResult) return;
   if (applyLink()) {
     renderCountries();
     renderPicked();
@@ -1326,13 +1327,13 @@ function undoRemove() {
 const NAMES_MAX = 400; // rows drawn at once; the filter narrows the rest
 let namesOpenPano = "",
   namesSig = "";
-const el = (tag, props = {}, ...kids) => {
+const makeElement = (tag, props = {}, ...kids) => {
   const n = Object.assign(document.createElement(tag), props);
   n.append(...kids);
   return n;
 };
-const link = (href, label, cls = "") =>
-  el("a", { href, target: "_blank", rel: "noopener", className: cls }, label);
+const makeLink = (href, label, cls = "") =>
+  makeElement("a", { href, target: "_blank", rel: "noopener", className: cls }, label);
 function showOnMap(loc) {
   const m = loc.layers && loc.layers[2];
   if (!map || !m) return;
@@ -1346,47 +1347,47 @@ function renderNames(force) {
   $("namesOpen").disabled = !named.length && $("names").hidden;
   $("namesOpen").textContent = named.length ? `List by name (${fmt(named.length)})` : "List by name";
   if ($("names").hidden) return;
-  const q = norm($("namesFilter").value.trim());
+  const q = foldAccents($("namesFilter").value.trim());
   const sig = [results.length, removed.length, q, namesOpenPano].join("|");
   if (!force && sig === namesSig) return;
   namesSig = sig;
   const rows = named
     .map(l => ({ l, c: l.poi.cc ? countryName(l.poi.cc) : "" }))
-    .filter(r => !q || norm(r.l.poi.name).includes(q) || norm(r.c).includes(q))
+    .filter(r => !q || foldAccents(r.l.poi.name).includes(q) || foldAccents(r.c).includes(q))
     .sort((a, b) => a.l.poi.name.localeCompare(b.l.poi.name) || a.c.localeCompare(b.c));
   const list = $("namesList");
   list.textContent = "";
   for (const { l, c } of rows.slice(0, NAMES_MAX)) {
     const open = l.panoId === namesOpenPano;
-    const row = el(
+    const row = makeElement(
       "button",
       { type: "button", className: "row" },
-      el("span", {}, l.poi.name),
-      el("small", {}, c),
+      makeElement("span", {}, l.poi.name),
+      makeElement("small", {}, c),
     );
     row.setAttribute("aria-expanded", String(open));
     row.onclick = () => {
       namesOpenPano = open ? "" : l.panoId;
       renderNames(true);
     };
-    const li = el("li", {}, row);
+    const li = makeElement("li", {}, row);
     if (open) {
-      const rm = el("button", { type: "button", className: "rm" }, "Remove from map");
+      const rm = makeElement("button", { type: "button", className: "rm" }, "Remove from map");
       rm.onclick = () => {
         namesOpenPano = "";
         removeLocation(l);
       };
-      const show = el("button", { type: "button", className: "btn" }, "Show on map");
+      const show = makeElement("button", { type: "button", className: "btn" }, "Show on map");
       show.onclick = () => showOnMap(l);
       li.append(
-        el(
+        makeElement(
           "div",
           { className: "detail" },
           `${Math.round(l.dist)} m away${l.date ? ", photo from " + l.date : ""}${l.road === "has" ? `. Road name shown: ${l.roadName}` : l.road === "none" ? ". No road name shown" : ""}`,
-          link(svLink(l), "Open in Street View", "svbtn"),
-          link(gmaps(l.poi), "Open in Google Maps"),
-          link(osmLink(l.poi), "See the place on OpenStreetMap"),
-          el("div", { className: "acts" }, show, rm),
+          makeLink(svLink(l), "Open in Street View", "svbtn"),
+          makeLink(gmaps(l.poi), "Open in Google Maps"),
+          makeLink(osmLink(l.poi), "See the place on OpenStreetMap"),
+          makeElement("div", { className: "acts" }, show, rm),
         ),
       );
     }
@@ -1430,7 +1431,7 @@ class SearchError extends Error {
     this.detail = detail || "";
   }
 }
-const plain = html =>
+const htmlToText = html =>
   String(html)
     .replace(/<[^>]*>/g, " ")
     .replace(/\s+/g, " ")
@@ -1471,7 +1472,7 @@ async function overpassGroup(servers, query, signal, waitSeconds) {
       if (r.status === 400)
         throw new SearchError(
           "syntax",
-          `${host} answered HTTP 400: ${text(plain(await r.text().catch(() => "")), 400)}`,
+          `${host} answered HTTP 400: ${cleanText(htmlToText(await r.text().catch(() => "")), 400)}`,
         );
       if (r.status === 401 || r.status === 403) {
         tried.push({ host, kind: mine ? "denied" : "busy", note: `HTTP ${r.status}, access refused` });
@@ -1496,7 +1497,7 @@ async function overpassGroup(servers, query, signal, waitSeconds) {
         tried.push({ host, kind: "format", note: "the answer was not readable data" });
         continue;
       }
-      const remark = text(j && j.remark, 400);
+      const remark = cleanText(j && j.remark, 400);
       if (/rate_limited|too many requests/i.test(remark)) {
         tried.push({ host, kind: "rate", note: remark });
         continue;
@@ -1519,7 +1520,7 @@ async function overpassGroup(servers, query, signal, waitSeconds) {
       tried.push({
         host,
         kind: "network",
-        note: `no connection (${text(e && e.message, 80) || "request failed"})`,
+        note: `no connection (${cleanText(e && e.message, 80) || "request failed"})`,
       });
     } finally {
       clearTimeout(timer);
@@ -1660,7 +1661,7 @@ function mergeElements(els, byId, fallbackCc, stats) {
     if (!Number.isSafeInteger(e.id) || e.id < 0) continue;
     const lat = e.lat ?? e.center?.lat,
       lng = e.lon ?? e.center?.lon;
-    if (!finite(lat, -90, 90) || !finite(lng, -180, 180)) {
+    if (!inRange(lat, -90, 90) || !inRange(lng, -180, 180)) {
       if (stats) stats.noPosition++;
       continue;
     }
@@ -1673,7 +1674,7 @@ function mergeElements(els, byId, fallbackCc, stats) {
       lat,
       lng,
       cc,
-      name: text(e.tags?.["name:en"]) || text(e.tags?.name),
+      name: cleanText(e.tags?.["name:en"]) || cleanText(e.tags?.name),
     });
   }
 }
@@ -1705,7 +1706,7 @@ function parseOwn(raw) {
     throw new Error('This JSON has no "elements" list, so it is not raw OSM data.' + how);
   if (!j.elements.length)
     throw new Error(
-      `The result is empty${j.remark ? ": " + text(j.remark, 200) : ""}. Check the query in Overpass Turbo.`,
+      `The result is empty${j.remark ? ": " + cleanText(j.remark, 200) : ""}. Check the query in Overpass Turbo.`,
     );
 
   // Positions of plain nodes, and which nodes only exist as corner points of outlines.
@@ -1713,7 +1714,7 @@ function parseOwn(raw) {
     corner = new Set();
   for (const e of j.elements) {
     if (!e || typeof e !== "object") continue;
-    if (e.type === "node" && finite(e.lat, -90, 90) && finite(e.lon, -180, 180)) at.set(e.id, e);
+    if (e.type === "node" && inRange(e.lat, -90, 90) && inRange(e.lon, -180, 180)) at.set(e.id, e);
     if (e.type === "way" && Array.isArray(e.nodes)) for (const n of e.nodes) corner.add(n);
     if (e.type === "relation" && Array.isArray(e.members))
       for (const m of e.members) if (m && m.type === "node") corner.add(m.ref);
@@ -1725,7 +1726,7 @@ function parseOwn(raw) {
       d = -180,
       n = 0;
     for (const q of pts)
-      if (q && finite(q.lat, -90, 90) && finite(q.lon, -180, 180)) {
+      if (q && inRange(q.lat, -90, 90) && inRange(q.lon, -180, 180)) {
         a = Math.min(a, q.lat);
         b = Math.max(b, q.lat);
         c = Math.min(c, q.lon);
@@ -1744,10 +1745,10 @@ function parseOwn(raw) {
       const bb = e.bounds;
       let c =
         bb &&
-        finite(bb.minlat, -90, 90) &&
-        finite(bb.maxlat, -90, 90) &&
-        finite(bb.minlon, -180, 180) &&
-        finite(bb.maxlon, -180, 180)
+        inRange(bb.minlat, -90, 90) &&
+        inRange(bb.maxlat, -90, 90) &&
+        inRange(bb.minlon, -180, 180) &&
+        inRange(bb.maxlon, -180, 180)
           ? { lat: (bb.minlat + bb.maxlat) / 2, lon: (bb.minlon + bb.maxlon) / 2 }
           : null;
       if (!c && Array.isArray(e.geometry)) c = middle(e.geometry);
@@ -1760,7 +1761,7 @@ function parseOwn(raw) {
               : Array.isArray(m.geometry)
                 ? m.geometry
                 : m.type === "node"
-                  ? [finite(m.lat, -90, 90) ? m : at.get(m.ref)]
+                  ? [inRange(m.lat, -90, 90) ? m : at.get(m.ref)]
                   : [],
           ),
         );
@@ -1802,15 +1803,15 @@ function parseOwn(raw) {
 /* Countries grouped into parts of similar cost, the cheapest parts first. */
 function makeParts(codes) {
   const bins = [];
-  for (const c of [...codes].sort((x, y) => cw(y) - cw(x))) {
-    let bin = bins.find(b => b.w + cw(c) <= PART_WEIGHT);
+  for (const c of [...codes].sort((x, y) => countryWeight(y) - countryWeight(x))) {
+    let bin = bins.find(b => b.w + countryWeight(c) <= PART_WEIGHT);
     if (!bin) {
       bin = { codes: [], w: 0, top: 0 };
       bins.push(bin);
     }
     bin.codes.push(c);
-    bin.w += cw(c);
-    bin.top = Math.max(bin.top, cw(c));
+    bin.w += countryWeight(c);
+    bin.top = Math.max(bin.top, countryWeight(c));
   }
   return bins.sort((x, y) => x.top - y.top || x.w - y.w).map(b => b.codes);
 }
@@ -1819,13 +1820,13 @@ function halve(codes) {
     b = [];
   let wa = 0,
     wb = 0;
-  for (const c of [...codes].sort((x, y) => cw(y) - cw(x))) {
+  for (const c of [...codes].sort((x, y) => countryWeight(y) - countryWeight(x))) {
     if (wa <= wb) {
       a.push(c);
-      wa += cw(c);
+      wa += countryWeight(c);
     } else {
       b.push(c);
-      wb += cw(c);
+      wb += countryWeight(c);
     }
   }
   return [a, b];
@@ -1857,7 +1858,7 @@ async function fetchPlaces(filter, codes, signal, onProgress = () => {}) {
   }
 
   const queue = makeParts(codes),
-    total = weigh(codes),
+    total = weightOf(codes),
     skipped = [],
     failures = [];
   const inner = new AbortController(),
@@ -1913,13 +1914,13 @@ async function fetchPlaces(filter, codes, signal, onProgress = () => {}) {
         return;
       }
       skipped.push(part[0]);
-      done += cw(part[0]);
+      done += countryWeight(part[0]);
       report();
       return;
     }
     mergeElements(els, byId, part.length === 1 ? part[0] : undefined);
     okParts++;
-    done += weigh(part);
+    done += weightOf(part);
     report();
   };
   const worker = async () => {
@@ -1957,22 +1958,22 @@ let restWorked = false,
   jsService = null;
 /* Keep only well-formed values from a Street View answer. */
 function cleanPano(r) {
-  const status = text(r.status, 40) || "NO_STATUS";
-  if (status !== "OK") return { status, detail: text(r.detail, 300) };
-  if (!finite(r.lat, -90, 90) || !finite(r.lng, -180, 180))
+  const status = cleanText(r.status, 40) || "NO_STATUS";
+  if (status !== "OK") return { status, detail: cleanText(r.detail, 300) };
+  if (!inRange(r.lat, -90, 90) || !inRange(r.lng, -180, 180))
     return { status: "MALFORMED", detail: "the answer had no usable position" };
   if (typeof r.panoId !== "string" || !/^[^\s<>"'`\\]{4,300}$/.test(r.panoId))
     return {
       status: "MALFORMED",
-      detail: `the panorama ID had an unexpected form (${text(String(r.panoId), 40)})`,
+      detail: `the panorama ID had an unexpected form (${cleanText(String(r.panoId), 40)})`,
     };
-  const date = text(r.date, 10);
+  const date = cleanText(r.date, 10);
   return {
     status,
     lat: r.lat,
     lng: r.lng,
     panoId: r.panoId,
-    copyright: text(r.copyright),
+    copyright: cleanText(r.copyright),
     date: /^\d{4}(-\d{2})?$/.test(date) ? date : "",
   };
 }
@@ -2025,7 +2026,7 @@ async function lookupScript(p, radius, key, sources = ["outdoor"]) {
     sv.getPanorama(
       { location: { lat: p.lat, lng: p.lng }, radius, sources, preference: "nearest" },
       (d, status) => {
-        if (status !== "OK" || !d?.location) return resolve({ status: text(status, 40) || "NO_STATUS" });
+        if (status !== "OK" || !d?.location) return resolve({ status: cleanText(status, 40) || "NO_STATUS" });
         resolve(
           cleanPano({
             status: "OK",
@@ -2057,10 +2058,10 @@ async function lookup(p, radius, key, signal, officialOnly) {
    with this key, probe six points around the place with the ordinary lookup and keep the closest official answer. */
 let officialVia = "";
 function offsetPoint(p, metres, bearingDeg) {
-  const t = rad(bearingDeg);
+  const t = toRadians(bearingDeg);
   return {
     lat: p.lat + (metres * Math.cos(t)) / 111320,
-    lng: p.lng + (metres * Math.sin(t)) / (111320 * Math.max(0.01, Math.cos(rad(p.lat)))),
+    lng: p.lng + (metres * Math.sin(t)) / (111320 * Math.max(0.01, Math.cos(toRadians(p.lat)))),
   };
 }
 async function officialNearby(p, maxDist, key, signal) {
@@ -2110,7 +2111,7 @@ async function roadInfo(panoId, key) {
       clearTimeout(t);
       if (status !== "OK" || !d || scriptBroken) return resolve({ state: "unknown" });
       const names = (Array.isArray(d.links) ? d.links : [])
-        .map(l => text(l && l.description, 120).trim())
+        .map(l => cleanText(l && l.description, 120).trim())
         .filter(Boolean);
       resolve(names.length ? { state: "has", name: names[0] } : { state: "none" });
     });
@@ -2153,8 +2154,8 @@ function failReason(r) {
     default:
       return {
         key: "other",
-        short: `the answer "${text(r.status, 40)}"`,
-        text: `Google answered "${text(r.status, 40)}".`,
+        short: `the answer "${cleanText(r.status, 40)}"`,
+        text: `Google answered "${cleanText(r.status, 40)}".`,
       };
   }
 }
@@ -2174,14 +2175,14 @@ let results = [],
    with other settings: { places, skipped, label, name, where } */
 let lastFetch = null;
 function renderAgain() {
-  const on = !!lastFetch && !own;
+  const on = !!lastFetch && !ownResult;
   $("againBox").hidden = !on;
   $("again").disabled = running;
   if (on)
     $("againHint").textContent =
       `Uses the ${fmt(lastFetch.places.length)} ${lastFetch.places.length === 1 ? "place" : "places"} already found for "${lastFetch.label}" (${lastFetch.where}) with the settings in step 3. OpenStreetMap is not asked again.`;
 }
-const stats = () => ({
+const emptyStats = () => ({
   places: 0,
   checked: 0,
   none: 0,
@@ -2196,7 +2197,7 @@ const stats = () => ({
   skipped: 0,
   progress: 0,
 });
-let S = stats();
+let searchStats = emptyStats();
 
 function show(type, text) {
   const m = $("message");
@@ -2233,28 +2234,35 @@ $("failRetry").onclick = () => {
 function paint(now) {
   if (now) $("now").textContent = now;
   $("count").textContent = fmt(results.length);
-  $("fill").style.width = Math.min(100, 100 * S.progress) + "%";
+  $("fill").style.width = Math.min(100, 100 * searchStats.progress) + "%";
   const t = [];
-  if (S.places)
+  if (searchStats.places)
     t.push(
-      `<span><b>${fmt(S.places)}</b> places on OpenStreetMap</span>`,
-      `<span><b>${fmt(S.checked)}</b> checked</span>`,
+      `<span><b>${fmt(searchStats.places)}</b> places on OpenStreetMap</span>`,
+      `<span><b>${fmt(searchStats.checked)}</b> checked</span>`,
     );
-  if (S.none) t.push(`<span><b>${fmt(S.none)}</b> without Street View nearby</span>`);
-  if (S.far + S.close) t.push(`<span><b>${fmt(S.far + S.close)}</b> outside your distance</span>`);
-  if (S.unofficial) t.push(`<span><b>${fmt(S.unofficial)}</b> not official coverage</span>`);
-  if (S.dup) t.push(`<span><b>${fmt(S.dup)}</b> duplicates</span>`);
-  if (S.road.has + S.road.none)
-    t.push(`<span><b>${fmt(S.road.has)}</b> with a road name, <b>${fmt(S.road.none)}</b> without</span>`);
-  if (S.rescued) t.push(`<span><b>${fmt(S.rescued)}</b> found by a second, official-only look</span>`);
-  if (S.failed) t.push(`<span><b>${fmt(S.failed)}</b> lookups failed</span>`);
-  if (S.skipped)
-    t.push(`<span><b>${fmt(S.skipped)}</b> ${S.skipped === 1 ? "country" : "countries"} left out</span>`);
+  if (searchStats.none) t.push(`<span><b>${fmt(searchStats.none)}</b> without Street View nearby</span>`);
+  if (searchStats.far + searchStats.close)
+    t.push(`<span><b>${fmt(searchStats.far + searchStats.close)}</b> outside your distance</span>`);
+  if (searchStats.unofficial)
+    t.push(`<span><b>${fmt(searchStats.unofficial)}</b> not official coverage</span>`);
+  if (searchStats.dup) t.push(`<span><b>${fmt(searchStats.dup)}</b> duplicates</span>`);
+  if (searchStats.road.has + searchStats.road.none)
+    t.push(
+      `<span><b>${fmt(searchStats.road.has)}</b> with a road name, <b>${fmt(searchStats.road.none)}</b> without</span>`,
+    );
+  if (searchStats.rescued)
+    t.push(`<span><b>${fmt(searchStats.rescued)}</b> found by a second, official-only look</span>`);
+  if (searchStats.failed) t.push(`<span><b>${fmt(searchStats.failed)}</b> lookups failed</span>`);
+  if (searchStats.skipped)
+    t.push(
+      `<span><b>${fmt(searchStats.skipped)}</b> ${searchStats.skipped === 1 ? "country" : "countries"} left out</span>`,
+    );
   if (removed.length)
     t.push(
       `<span><b>${fmt(removed.length)}</b> removed by you <button type="button" class="undo" id="undo">Undo</button></span>`,
     );
-  if (!running && map && S.checked > results.length + removed.length)
+  if (!running && map && searchStats.checked > results.length + removed.length)
     t.push(
       `<span class="key"><i></i>Select a muted dot to see why a place was left out, with a Google Maps link.</span>`,
     );
@@ -2298,7 +2306,7 @@ $("form").onsubmit = ev => {
   else startSearch(null);
 };
 $("again").onclick = () => {
-  if (!running && lastFetch && !own) startSearch(lastFetch);
+  if (!running && lastFetch && !ownResult) startSearch(lastFetch);
 };
 /* reuse: the kept result of an earlier OpenStreetMap search, to check Street View on it again. */
 async function startSearch(reuse) {
@@ -2306,13 +2314,14 @@ async function startSearch(reuse) {
   show("", "");
   // Places that are already there: an earlier search result, or the user's own Overpass result.
   const ownRun =
-    reuse || (own ? { places: own.places, skipped: [], label: ownLabel(), name: ownLabel() } : null);
+    reuse ||
+    (ownResult ? { places: ownResult.places, skipped: [], label: ownLabel(), name: ownLabel() } : null);
   let words = [];
   if (!ownRun) {
     if (!kind) {
       // typed but not picked: accept an exact catalogue name
       const hit = searchCatalogue(kindEl.value, 1)[0];
-      if (hit && norm(hit.label) === norm(kindEl.value.trim())) choose(hit);
+      if (hit && foldAccents(hit.label) === foldAccents(kindEl.value.trim())) choose(hit);
     }
     words = nameWords();
     if (!kind && kindEl.value.trim())
@@ -2364,7 +2373,7 @@ async function startSearch(reuse) {
   lastName = $("mapName").value.trim() || (ownRun ? ownRun.name : $("mapName").placeholder);
   results = [];
   removed = [];
-  S = stats();
+  searchStats = emptyStats();
   $("fail").hidden = true;
   layer?.clearLayers();
   dots?.clearLayers();
@@ -2399,8 +2408,8 @@ async function startSearch(reuse) {
             $("track").classList.remove("busy");
             $("track").classList.add("osm");
           }
-          S.progress = p.fraction;
-          S.places = p.places;
+          searchStats.progress = p.fraction;
+          searchStats.places = p.places;
           paint();
           phaseSub = p.waiting
             ? "The servers asked to slow down. Waiting 20 seconds before continuing."
@@ -2415,9 +2424,9 @@ async function startSearch(reuse) {
         }
         throw e;
       }
-    S.places = places.length;
-    S.progress = 0;
-    S.skipped = skipped.length;
+    searchStats.places = places.length;
+    searchStats.progress = 0;
+    searchStats.skipped = skipped.length;
     if (!ownRun && osmOwn) {
       if (osmOwn.mode === "first" && osmUse.ownTrouble && osmUse.pub)
         notes.push(
@@ -2487,7 +2496,7 @@ async function startSearch(reuse) {
           }
           break;
         }
-        S.checked++;
+        searchStats.checked++;
         if (r.status === "REQUEST_DENIED") {
           fatal = new SearchError(
             "key",
@@ -2508,24 +2517,24 @@ async function startSearch(reuse) {
           const d = distance(r.lat, r.lng, p.lat, p.lng);
           const m = Math.round(d);
           if (official && !isOfficial(r.copyright)) {
-            S.unofficial++;
+            searchStats.unofficial++;
             markMissed(
               p,
               `Within ${maxDist} m there are only photos uploaded by other people, no official Google coverage.`,
               r,
             );
           } else if (d > maxDist) {
-            S.far++;
+            searchStats.far++;
             markMissed(p, `The nearest Street View is ${m} m away, beyond your ${maxDist} m.`, r);
           } else if (d < minDist) {
-            S.close++;
+            searchStats.close++;
             markMissed(p, `The nearest Street View is only ${m} m away, closer than your ${minDist} m.`, r);
           } else if (seen.has(r.panoId)) {
-            S.dup++;
+            searchStats.dup++;
             markMissed(p, "Shares its Street View spot with another place on the map.", r);
           } else if (results.length < target) {
             seen.add(r.panoId);
-            if (second) S.rescued++;
+            if (second) searchStats.rescued++;
             if (p.dot) {
               dots.removeLayer(p.dot);
               p.dot = null;
@@ -2547,32 +2556,32 @@ async function startSearch(reuse) {
               const info = await roadInfo(loc.panoId, key);
               loc.road = info.state;
               loc.roadName = info.name || "";
-              S.road[info.state]++;
+              searchStats.road[info.state]++;
               loc.tags = tagList(loc);
             }
           }
         } else if (r.status === "ZERO_RESULTS" || r.status === "NOT_FOUND") {
-          S.none++;
+          searchStats.none++;
           markMissed(p, `No Street View within ${maxDist} m.`);
         } else {
           const why = failReason(r),
             n = Math.min(tries, 3) + 1;
-          S.failed++;
-          S.failWhy[why.key] = { n: (S.failWhy[why.key]?.n || 0) + 1, short: why.short };
+          searchStats.failed++;
+          searchStats.failWhy[why.key] = { n: (searchStats.failWhy[why.key]?.n || 0) + 1, short: why.short };
           markMissed(p, `The Street View lookup failed${n > 1 ? ` after ${n} tries` : ""}. ${why.text}`);
         }
-        S.progress = Math.max(results.length / target, S.checked / places.length);
+        searchStats.progress = Math.max(results.length / target, searchStats.checked / places.length);
         if (performance.now() - lastPaint > 150) {
           lastPaint = performance.now();
           paint();
           $("liveSub").textContent =
-            `${fmt(results.length)} found, ${fmt(S.checked)} of ${fmt(places.length)} checked.`;
+            `${fmt(results.length)} found, ${fmt(searchStats.checked)} of ${fmt(places.length)} checked.`;
         }
       }
     };
     await Promise.all(Array.from({ length: PARALLEL }, worker));
     if (fatal) throw fatal;
-    S.progress = 1;
+    searchStats.progress = 1;
     setPhase(0);
     if (signal.aborted) paint(`Stopped. ${fmt(results.length)} locations so far.`);
     else if (results.length >= target)
@@ -2585,13 +2594,13 @@ async function startSearch(reuse) {
       paint(
         `Done. Every place was checked; ${fmt(results.length)} ${results.length === 1 ? "has" : "have"} Street View within range.`,
       );
-      if (!results.length && !S.failed)
+      if (!results.length && !searchStats.failed)
         notes.push(
           `No place had Street View within your distance. Try a larger distance in step ${lastStep()}.`,
         );
     }
-    if (S.failed && !signal.aborted) {
-      const why = Object.entries(S.failWhy).sort((x, y) => y[1].n - x[1].n),
+    if (searchStats.failed && !signal.aborted) {
+      const why = Object.entries(searchStats.failWhy).sort((x, y) => y[1].n - x[1].n),
         top = why[0][0];
       const advice =
         top === "limit"
@@ -2602,12 +2611,12 @@ async function startSearch(reuse) {
               ? "This should not happen; pass the reason on to whoever runs this page."
               : "Run the search again later to pick them up.";
       notes.push(
-        `${fmt(S.failed)} Street View ${S.failed === 1 ? "lookup" : "lookups"} failed, so ${S.failed === 1 ? "that place was" : "those places were"} skipped. Cause: ${why.map(([, v]) => `${fmt(v.n)} × ${v.short}`).join(", ")}. ${advice} Select a muted dot to see the reason for a single place.`,
+        `${fmt(searchStats.failed)} Street View ${searchStats.failed === 1 ? "lookup" : "lookups"} failed, so ${searchStats.failed === 1 ? "that place was" : "those places were"} skipped. Cause: ${why.map(([, v]) => `${fmt(v.n)} × ${v.short}`).join(", ")}. ${advice} Select a muted dot to see the reason for a single place.`,
       );
     }
-    if (S.road.unknown)
+    if (searchStats.road.unknown)
       notes.push(
-        `${fmt(S.road.unknown)} ${S.road.unknown === 1 ? "location" : "locations"} could not be checked for a road name and ${S.road.unknown === 1 ? "has" : "have"} no road tag. ${scriptBroken ? "Google's Maps JavaScript API could not be used with this key; enable it in the Google Cloud console." : "Google gave no answer for them; running the search again may fill them in."}`,
+        `${fmt(searchStats.road.unknown)} ${searchStats.road.unknown === 1 ? "location" : "locations"} could not be checked for a road name and ${searchStats.road.unknown === 1 ? "has" : "have"} no road tag. ${scriptBroken ? "Google's Maps JavaScript API could not be used with this key; enable it in the Google Cloud console." : "Google gave no answer for them; running the search again may fill them in."}`,
       );
     if (notes.length) show("note", notes.join(" "));
   } catch (e) {
@@ -2638,7 +2647,7 @@ async function startSearch(reuse) {
           "Something went wrong inside the page itself. Running the search again often works. If it keeps happening, pass the technical details to whoever runs this page.";
         detail = String(e && (e.stack || e.message || e)).slice(0, 600);
       }
-      if (!results.length) S.progress = 0;
+      if (!results.length) searchStats.progress = 0;
       fail(title, text, detail, !!e.retry);
       paint(
         results.length
@@ -2674,7 +2683,7 @@ $("download").onclick = () => {
   const a = document.createElement("a");
   a.href = URL.createObjectURL(new Blob([exportJson()], { type: "application/json" }));
   a.download =
-    (norm(lastName)
+    (foldAccents(lastName)
       .replace(/[^a-z0-9]+/g, "-")
       .replace(/^-|-$/g, "") || "lookout-map") + ".json";
   a.click();

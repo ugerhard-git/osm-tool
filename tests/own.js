@@ -209,13 +209,13 @@ fs.writeFileSync(path.join(__dirname, "../dist/loose-export.json"), JSON.stringi
   await p.waitForFunction(() => /loose-export/.test(document.getElementById("ownSummary").textContent));
   console.log("  summary:", (await p.innerText("#ownSummary")).replace(/\n/g, " | "));
   const st = await p.evaluate(() => ({
-    n: own.places.length,
-    names: own.places.map(x => x.name).join("; "),
-    worked: own.worked,
-    noPos: own.noPosition,
-    lines: own.lines,
-    cc: own.hasCc,
-    c20: own.places.find(x => x.id === 20),
+    n: ownResult.places.length,
+    names: ownResult.places.map(x => x.name).join("; "),
+    worked: ownResult.worked,
+    noPos: ownResult.noPosition,
+    lines: ownResult.lines,
+    cc: ownResult.hasCc,
+    c20: ownResult.places.find(x => x.id === 20),
   }));
   console.log("  ", JSON.stringify(st));
   ok(
