@@ -61,8 +61,12 @@ const done = page => page.waitForFunction(() => !running && !/Ready/.test(docume
   let fail = 0; const ok = (c, m) => { console.log((c?'PASS ':'FAIL ')+m); if(!c) fail++; };
 
   { const {page, log} = await setup(browser, {osmDelay:400, gDelay:1500});
-    ok(await page.inputValue('#maxDist')==='25', 'default 25 m');
+    ok(await page.inputValue('#maxDist')==='50', 'default 50 m');
+    ok(await page.evaluate(()=>{ const t=document.getElementById('target'); return t.defaultValue; })==='1000', 'default 1000 locations wanted');
+    ok(JSON.stringify(await page.$$eval('input[name=scope]', rs=>rs.map(r=>r.value)))==='["pick","world","cov"]', 'Street View countries listed third');
+    ok(!/Maps JavaScript API/.test(await page.textContent('label:has(#tagRoad)')), 'road tag hint has no API note');
     ok(/119 countries/.test(await page.textContent('#covHint')), 'coverage hint: '+await page.textContent('#covHint'));
+    await page.fill('#maxDist','25');   // the checks below were written for 25 m
     await page.fill('#apiKey','KEY');
     // autocomplete
     await page.click('#kind'); await page.keyboard.type('lightho', {delay:20});

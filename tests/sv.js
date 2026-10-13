@@ -14,7 +14,7 @@ async function run(b, name, {places, rest, js, check}) {
     if (u.includes('maps/api/js')) return js === 'abort' ? r.abort() : r.fulfill({contentType:'text/javascript', body: js});
     if (u.includes('taginfo')) return r.fulfill({headers:H, json:{data:[{type:'all',count:100}]}});
     return r.fulfill({status:204, body:''}); });
-  await p.goto('file://'+path.resolve(__dirname,'../dist/index.nokey.html')); await p.fill('#apiKey','KEY'); await p.fill('#kind','Lighthouse'); await p.keyboard.press('Enter');
+  await p.goto('file://'+path.resolve(__dirname,'../dist/index.nokey.html')); await p.fill('#maxDist','25'); await p.fill('#apiKey','KEY'); await p.fill('#kind','Lighthouse'); await p.keyboard.press('Enter');
   await p.check('input[name=scope][value=pick]'); await p.check('#countries input[value=MT]'); await p.click('#go');
   await p.waitForFunction(() => !running && !/Ready/.test(document.getElementById('now').textContent), null, {timeout:60000});
   const o = await p.evaluate(() => { const pops = {}; dots.eachLayer(l => { const h = l.getPopup().getContent()(l); pops[/<b>(.*?)<\/b>/.exec(h)[1]] = h.replace(/<a[\s\S]*$/,'').replace(/<[^>]+>/g,' ').replace(/\s+/g,' ').replace(/&#39;/g,"'").replace(/&quot;/g,'"').replace(/&lt;/g,'<').replace(/&gt;/g,'>').trim(); });

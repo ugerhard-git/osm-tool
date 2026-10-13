@@ -24,7 +24,7 @@ const H = {'access-control-allow-origin':'*'}; const file = 'file://'+path.resol
   const p3 = await mk(`${file}#k=${X}&n=${X}&s=${X}&c=DE-${X}-zz-FR&d=9e99&m=-5&t=abc&name=${X}&o=${X}`); await p3.waitForTimeout(300);
   const h = await p3.evaluate(() => ({ xss: window.__xss, imgs: document.querySelectorAll('img[src="x"]').length, kind: kind && kind.tag, s: scope(), c: [...selected].join(), d: maxDist.value, m: minDist.value, t: target.value }));
   console.log(JSON.stringify(h));
-  ok(h.xss===undefined && h.imgs===0 && h.kind===null && h.s==='pick' && h.c==='DE,FR' && h.d==='2000' && h.m==='0' && h.t==='500', 'hostile link values rejected or clamped');
+  ok(h.xss===undefined && h.imgs===0 && h.kind===null && h.s==='pick' && h.c==='DE,FR' && h.d==='2000' && h.m==='0' && h.t==='1000', 'hostile link values rejected or clamped');
   const p4 = await mk(`${file}#k=amenity%3Dpub%7Cbar&d=3000&t=5`); await p4.waitForTimeout(300);
   ok(await p4.evaluate(()=>kind.tag==='amenity=pub|bar' && maxDist.value==='2000' && target.value==='5' && scope()==='pick'), 'raw tag link, distance clamped');
   await p4.evaluate(()=>{ location.hash = 'k=man_made%3Dwindmill&s=world'; }); await p4.waitForTimeout(300);
