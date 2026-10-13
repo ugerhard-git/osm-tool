@@ -1,4 +1,5 @@
 const { chromium } = require("./pw.js");
+const { PAGE, isSite, serveSite } = require("./site.js");
 const path = require("path");
 const H = { "access-control-allow-origin": "*" };
 const cases = {
@@ -66,7 +67,7 @@ const cases = {
     });
     await p.route("**/*", r => {
       const u = r.request().url();
-      if (u.startsWith("file:")) return r.continue();
+      if (isSite(u)) return serveSite(r);
       if (u.includes("/api/interpreter")) {
         osm++;
         return handler(r);
@@ -91,7 +92,7 @@ const cases = {
         return r.fulfill({ headers: H, json: { data: [{ type: "all", count: 100 }] } });
       return r.fulfill({ status: 204, body: "" });
     });
-    await p.goto("file://" + path.resolve(__dirname, "../dist/index.nokey.html"));
+    await p.goto(PAGE);
     await p.fill("#apiKey", "KEY");
     await p.check("input[name=scope][value=cov]");
     await p.fill("#kind", "Lighthouse");

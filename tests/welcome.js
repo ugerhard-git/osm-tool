@@ -1,4 +1,5 @@
 const { chromium } = require("playwright");
+const { PAGE, isSite, serveSite } = require("./site.js");
 const path = require("path");
 (async () => {
   const b = await chromium.launch();
@@ -15,9 +16,9 @@ const path = require("path");
     if (/Content Security/.test(m.text())) errs.push(m.text());
   });
   await p.route("**/*", r =>
-    r.request().url().startsWith("file:") ? r.continue() : r.fulfill({ status: 204, body: "" }),
+    isSite(r.request().url()) ? serveSite(r) : r.fulfill({ status: 204, body: "" }),
   );
-  const url = "file://" + path.resolve(__dirname, "../dist/index.nokey.html");
+  const url = PAGE;
   await p.goto(url);
   ok(
     (await p.isVisible("#welcome")) && (await p.evaluate(() => document.activeElement.id === "welcomeBox")),
@@ -56,7 +57,7 @@ const path = require("path");
   ok(await p.isHidden("#welcome"), "not shown again after a reload");
   const p2 = await ctx.newPage();
   await p2.route("**/*", r =>
-    r.request().url().startsWith("file:") ? r.continue() : r.fulfill({ status: 204, body: "" }),
+    isSite(r.request().url()) ? serveSite(r) : r.fulfill({ status: 204, body: "" }),
   );
   await p2.goto(url);
   ok(await p2.isHidden("#welcome"), "not shown again in a new tab of the same browser");
@@ -83,7 +84,7 @@ const path = require("path");
   const ctx2 = await b.newContext({ viewport: { width: 390, height: 780 } });
   const m = await ctx2.newPage();
   await m.route("**/*", r =>
-    r.request().url().startsWith("file:") ? r.continue() : r.fulfill({ status: 204, body: "" }),
+    isSite(r.request().url()) ? serveSite(r) : r.fulfill({ status: 204, body: "" }),
   );
   await m.goto(url + "#k=man_made%3Dlighthouse");
   ok(await m.isVisible("#welcome"), "a fresh browser sees it");

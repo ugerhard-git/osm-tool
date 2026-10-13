@@ -14,7 +14,7 @@ fs.mkdirSync(path.join(dist, "screens"), { recursive: true });
 const only = process.argv.slice(2);
 const files = fs
   .readdirSync(__dirname)
-  .filter(f => f.endsWith(".js") && !["run.js", "pw.js"].includes(f))
+  .filter(f => f.endsWith(".js") && !["run.js", "pw.js", "site.js"].includes(f))
   .filter(f => !only.length || only.some(o => f.startsWith(o)))
   .sort();
 

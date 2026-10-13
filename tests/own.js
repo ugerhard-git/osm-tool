@@ -1,4 +1,5 @@
 const { chromium } = require("./pw.js");
+const { PAGE, isSite, serveSite } = require("./site.js");
 const path = require("path");
 const fs = require("fs");
 const H = { "access-control-allow-origin": "*" };
@@ -74,7 +75,7 @@ fs.writeFileSync(path.join(__dirname, "../dist/loose-export.json"), JSON.stringi
   p.on("pageerror", e => errs.push(String(e)));
   await p.route("**/*", async r => {
     const u = r.request().url();
-    if (u.startsWith("file:")) return r.continue();
+    if (isSite(u)) return serveSite(r);
     if (u.includes("/api/interpreter")) {
       osm.push(u);
       return r.fulfill({ headers: H, json: { elements: [] } });
@@ -96,7 +97,7 @@ fs.writeFileSync(path.join(__dirname, "../dist/loose-export.json"), JSON.stringi
       return r.fulfill({ headers: H, json: { data: [{ type: "all", count: 100 }] } });
     return r.fulfill({ status: 204, body: "" });
   });
-  await p.goto("file://" + path.resolve(__dirname, "../dist/index.nokey.html"));
+  await p.goto(PAGE);
   await p.fill("#apiKey", "KEY");
   await p.click("#expert summary");
   ok(

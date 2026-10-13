@@ -1,6 +1,7 @@
 // Security checks that are not tied to one feature: framing, the content security policy,
 // and stored values that have been tampered with.
 const { chromium } = require("./pw.js");
+const { SITE, PAGE, isSite, serveSite } = require("./site.js");
 const path = require("path");
 const fs = require("fs");
 const page = path.resolve(__dirname, "../dist/index.nokey.html");
@@ -53,9 +54,9 @@ const page = path.resolve(__dirname, "../dist/index.nokey.html");
   const errs = [];
   p.on("pageerror", e => errs.push(String(e)));
   await p.route("**/*", r =>
-    r.request().url().startsWith("file:") ? r.continue() : r.fulfill({ status: 204, body: "" }),
+    isSite(r.request().url()) ? serveSite(r) : r.fulfill({ status: 204, body: "" }),
   );
-  await p.goto("file://" + outer);
+  await p.goto(SITE + "frame-test.html");
   await p.waitForTimeout(800);
   const f = p.frames().find(x => x.url().includes("index.nokey.html"));
   const st = await f.evaluate(() => ({
@@ -73,7 +74,7 @@ const page = path.resolve(__dirname, "../dist/index.nokey.html");
       /index\.nokey\.html\?k=man_made/.test(st.link),
     "inside a frame: app hidden, link to open it on its own: " + JSON.stringify(st),
   );
-  await p.goto("file://" + page);
+  await p.goto(PAGE);
   ok((await p.isVisible(".app")) && (await p.isHidden("#framed")), "opened directly: app shown");
 
   // tampered stored values do not break the page

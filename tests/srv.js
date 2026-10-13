@@ -1,4 +1,5 @@
 const { chromium } = require("./pw.js");
+const { PAGE, isSite, serveSite } = require("./site.js");
 const path = require("path");
 const H = { "access-control-allow-origin": "*" };
 const KEY = "SECRETKEY123",
@@ -18,7 +19,7 @@ const els = [{ type: "area", id: 1, tags: { "ISO3166-1": "MT" } }, N(1, 35.9, 14
   const route = async p =>
     p.route("**/*", async r => {
       const u = r.request().url();
-      if (u.startsWith("file:")) return r.continue();
+      if (isSite(u)) return serveSite(r);
       const body = r.request().postData() || "";
       const test = body.includes("node(1)");
       if (u.startsWith("https://tile.tracestrack.com/")) {
@@ -66,7 +67,7 @@ const els = [{ type: "area", id: 1, tags: { "ISO3166-1": "MT" } }, N(1, 35.9, 14
     if (/Content Security|Refused/.test(m.text())) errs.push(m.text());
   });
   await route(p);
-  const url = "file://" + path.resolve(__dirname, "../dist/index.nokey.html");
+  const url = PAGE;
   const done = (q = p) =>
     q.waitForFunction(() => !running && !/Ready/.test(document.getElementById("now").textContent));
   const saved = () =>

@@ -1,8 +1,9 @@
 const { chromium } = require("./pw.js");
+const { SITE, PAGE, isSite, serveSite } = require("./site.js");
 const fs = require("fs"),
   path = require("path");
 const leafDir = path.join(path.dirname(require.resolve("leaflet/package.json")), "dist");
-const page_url = "file://" + path.resolve(__dirname, "../dist/index.nokey.html");
+const page_url = PAGE;
 const A = cc => ({ type: "area", id: 3600000000 + cc.charCodeAt(0), tags: { "ISO3166-1": cc, name: cc } });
 const PL = [
   { type: "node", id: 1, lat: 35.9, lon: 14.5, tags: { name: "Alpha Light" } },
@@ -83,7 +84,7 @@ async function setup(browser, o = {}) {
   const H = { "access-control-allow-origin": "*" };
   await page.route("**/*", async route => {
     const u = route.request().url();
-    if (u.startsWith("file:")) return route.continue();
+    if (isSite(u)) return serveSite(route);
     if (u.includes("leaflet.min.js"))
       return route.fulfill({
         body: fs.readFileSync(leafDir + "/leaflet.js"),
@@ -565,18 +566,8 @@ const done = page =>
       "name filter lifts the too-many block",
     );
     await page.fill("#nameHas", "");
-    // The test browser sometimes loses everything saved by a file:// page across a reload (all keys, not
-    // just this one). That is a quirk of the test setup, not the app, so put the saved settings back and retry.
-    const saved = await page.evaluate(() => JSON.stringify(Object.assign({}, localStorage)));
-    for (let i = 0; i < 3; i++) {
-      await page.reload();
-      await page.waitForLoadState("load");
-      if (await page.evaluate(() => JSON.parse(localStorage.getItem("lookout2.kind") || "null") !== null))
-        break;
-      await page.evaluate(s => {
-        for (const [k, v] of Object.entries(JSON.parse(s))) localStorage.setItem(k, v);
-      }, saved);
-    }
+    await page.reload();
+    await page.waitForLoadState("load");
     await page
       .waitForFunction(() => document.getElementById("kind").value !== "", null, { timeout: 5000 })
       .catch(() => {});
@@ -834,7 +825,7 @@ const done = page =>
     const H = { "access-control-allow-origin": "*" };
     await page.route("**/*", async route => {
       const u = route.request().url();
-      if (u.startsWith("file:")) return route.continue();
+      if (isSite(u)) return serveSite(route);
       seen.push(u);
       if (u.includes("/api/interpreter"))
         return route.fulfill({ json: { elements: [A("MT"), ...PL.slice(0, 3)] }, headers: H });
@@ -852,7 +843,7 @@ const done = page =>
         return route.fulfill({ json: { data: [{ type: "all", count: 100 }] }, headers: H });
       return route.fulfill({ status: 204, body: "" });
     });
-    await page.goto("file://" + path.resolve(__dirname, "../dist/edited.html"));
+    await page.goto(SITE + "edited.html");
     await page.waitForLoadState("load");
     ok(
       (await page.isHidden("#keyBox")) && /121 countries/.test(await page.textContent("#covHint")),

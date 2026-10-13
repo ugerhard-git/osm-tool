@@ -1,4 +1,5 @@
 const { chromium } = require("./pw.js");
+const { PAGE, isSite, serveSite } = require("./site.js");
 const path = require("path");
 const H = { "access-control-allow-origin": "*" };
 const N = (id, lat, lon, name) => ({ type: "node", id, lat, lon, tags: { name } });
@@ -23,7 +24,7 @@ async function run(b, name, { script, tick, check }) {
   });
   await p.route("**/*", async r => {
     const u = r.request().url();
-    if (u.startsWith("file:")) return r.continue();
+    if (isSite(u)) return serveSite(r);
     if (u.includes("/api/interpreter")) return r.fulfill({ headers: H, json: { elements: els } });
     if (u.includes("streetview/metadata")) {
       const m = /location=([-\d.]+),([-\d.]+)/.exec(u);
@@ -44,7 +45,7 @@ async function run(b, name, { script, tick, check }) {
       return r.fulfill({ headers: H, json: { data: [{ type: "all", count: 100 }] } });
     return r.fulfill({ status: 204, body: "" });
   });
-  await p.goto("file://" + path.resolve(__dirname, "../dist/index.nokey.html"));
+  await p.goto(PAGE);
   await p.fill("#apiKey", "KEY");
   await p.fill("#kind", "Lighthouse");
   await p.keyboard.press("Enter");
@@ -84,7 +85,10 @@ async function run(b, name, { script, tick, check }) {
   const b = await chromium.launch();
   let fail = 0;
   const p = await b.newPage();
-  await p.goto("file://" + path.resolve(__dirname, "../dist/index.nokey.html"));
+  await p.route("**/*", r =>
+    isSite(r.request().url()) ? serveSite(r) : r.fulfill({ status: 204, body: "" }),
+  );
+  await p.goto(PAGE);
   const off = !(await p.isChecked("#tagRoad"));
   console.log(off ? "PASS option off by default" : "FAIL option on by default");
   fail += off ? 0 : 1;

@@ -1,4 +1,5 @@
 const { chromium } = require("playwright");
+const { PAGE, isSite, serveSite } = require("./site.js");
 const path = require("path");
 (async () => {
   const b = await chromium.launch();
@@ -7,7 +8,7 @@ const path = require("path");
     console.log((c ? "PASS " : "FAIL ") + m);
     if (!c) fail++;
   };
-  const file = "file://" + path.resolve(__dirname, "../dist/index.nokey.html");
+  const file = PAGE;
   const st = p =>
     p.evaluate(() => ({
       kind: document.getElementById("kind").value,
@@ -25,7 +26,7 @@ const path = require("path");
     p.errs = [];
     p.on("pageerror", e => p.errs.push(String(e)));
     await p.route("**/*", r =>
-      r.request().url().startsWith("file:") ? r.continue() : r.fulfill({ status: 204, body: "" }),
+      isSite(r.request().url()) ? serveSite(r) : r.fulfill({ status: 204, body: "" }),
     );
     if (before) await before(p);
     await p.goto(url);

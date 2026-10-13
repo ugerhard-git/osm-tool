@@ -1,7 +1,8 @@
 const { chromium } = require("./pw.js");
+const { PAGE, isSite, serveSite } = require("./site.js");
 const path = require("path");
 const H = { "access-control-allow-origin": "*" };
-const file = "file://" + path.resolve(__dirname, "../dist/index.nokey.html");
+const file = PAGE;
 (async () => {
   const b = await chromium.launch();
   let fail = 0;
@@ -18,7 +19,7 @@ const file = "file://" + path.resolve(__dirname, "../dist/index.nokey.html");
     p.on("pageerror", e => p.errs.push(String(e)));
     await p.route("**/*", r => {
       const u = r.request().url();
-      if (u.startsWith("file:")) return r.continue();
+      if (isSite(u)) return serveSite(r);
       p.reqs.push(u);
       if (u.includes("taginfo"))
         return r.fulfill({ headers: H, json: { data: [{ type: "all", count: 100 }] } });

@@ -1,4 +1,5 @@
 const { chromium } = require("./pw.js");
+const { PAGE, isSite, serveSite } = require("./site.js");
 const path = require("path");
 const H = { "access-control-allow-origin": "*" };
 const N = (id, lat, lon, name) => ({ type: "node", id, lat, lon, tags: { name } });
@@ -24,7 +25,7 @@ const els = [
   p.on("pageerror", e => errs.push(String(e)));
   await p.route("**/*", async r => {
     const u = r.request().url();
-    if (u.startsWith("file:")) return r.continue();
+    if (isSite(u)) return serveSite(r);
     if (u.includes("/api/interpreter")) {
       osm++;
       return r.fulfill({
@@ -69,7 +70,7 @@ const els = [
         .sort()
         .join(","),
     );
-  await p.goto("file://" + path.resolve(__dirname, "../dist/index.nokey.html"));
+  await p.goto(PAGE);
   await p.fill("#maxDist", "25");
   await p.fill("#apiKey", "KEY");
   await p.fill("#kind", "Lighthouse");
