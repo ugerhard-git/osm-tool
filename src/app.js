@@ -755,7 +755,7 @@ $("chips").onclick = e => {
 function renderQuery() {
   const box = $("queryText"),
     link = $("turbo");
-  let text = "",
+  let text,
     ok = false;
   try {
     const s = scope(),
@@ -927,7 +927,7 @@ async function testServer(url) {
     return j && Array.isArray(j.elements)
       ? { ok: true }
       : { ok: false, why: "it did not answer with Overpass data" };
-  } catch (e) {
+  } catch {
     return {
       ok: false,
       why: ctl.signal.aborted
@@ -1359,7 +1359,7 @@ function placePopup(p) {
     <a href="${osmLink(p)}" target="_blank" rel="noopener">See the place on OpenStreetMap</a></div>`;
 }
 /* Records why a place was left out, and darkens its dot so it can be selected. */
-function markMissed(p, why, r, d) {
+function markMissed(p, why, r) {
   p.miss = { why, panoId: r && r.panoId, heading: r && r.panoId ? bearing(r.lat, r.lng, p.lat, p.lng) : 0 };
   p.dot?.setStyle({ radius: 3.5, fillColor: "#8a5a66", fillOpacity: 0.8 });
 }
@@ -2186,6 +2186,8 @@ async function lookup(p, radius, key, signal, officialOnly) {
 /* A second look for official coverage, used when the nearest panorama was uploaded by someone else.
    First choice: Google's script, which can search official coverage only. If the script cannot be used
    with this key, probe six points around the place with the ordinary lookup and keep the closest official answer. */
+// Which way the last second look went ("script" or "ring"). Only the tests read it.
+// eslint-disable-next-line no-unused-vars
 let officialVia = "";
 /* The point a given distance and direction away (good enough for short distances; 111,320 m per degree). */
 function offsetPoint(p, metres, bearingDeg) {

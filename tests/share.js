@@ -1,6 +1,5 @@
 const { chromium } = require("./pw.js");
 const { PAGE, isSite, serveSite } = require("./site.js");
-const path = require("path");
 const H = { "access-control-allow-origin": "*" };
 const file = PAGE;
 (async () => {
@@ -60,14 +59,14 @@ const file = PAGE;
     n: document.getElementById("nameHas").value,
     s: scope(),
     c: [...selected].sort().join(),
-    d: maxDist.value,
-    m: minDist.value,
-    t: target.value,
-    o: official.checked,
-    g: tags.checked,
-    gc: tagCountry.checked,
-    name: mapName.value,
-    key: apiKey.value,
+    d: document.getElementById("maxDist").value,
+    m: document.getElementById("minDist").value,
+    t: document.getElementById("target").value,
+    o: document.getElementById("official").checked,
+    g: document.getElementById("tags").checked,
+    gc: document.getElementById("tagCountry").checked,
+    name: document.getElementById("mapName").value,
+    key: document.getElementById("apiKey").value,
     running,
   }));
   console.log(JSON.stringify(st));
@@ -107,9 +106,9 @@ const file = PAGE;
     kind: kind && kind.tag,
     s: scope(),
     c: [...selected].join(),
-    d: maxDist.value,
-    m: minDist.value,
-    t: target.value,
+    d: document.getElementById("maxDist").value,
+    m: document.getElementById("minDist").value,
+    t: document.getElementById("target").value,
   }));
   console.log(JSON.stringify(h));
   ok(
@@ -129,8 +128,8 @@ const file = PAGE;
     await p4.evaluate(
       () =>
         kind.tag === "amenity=pub|bar" &&
-        maxDist.value === "2000" &&
-        target.value === "5" &&
+        document.getElementById("maxDist").value === "2000" &&
+        document.getElementById("target").value === "5" &&
         scope() === "pick",
     ),
     "raw tag link, distance clamped",

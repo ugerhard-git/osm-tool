@@ -1,7 +1,7 @@
 # Notes for Claude
 
 - The app is published as a single page, built from `src/page.html` (markup), `src/style.css` and `src/app.js`. Edit those (and `src/catalog.js` / `src/build.js` for build changes); never edit `dist/`.
-- After any change: `npm run format`, then `npm run build && npm test`. All test files must pass. Add a test file or cases in `tests/` for new behaviour; tests simulate every outside service with Playwright routes.
+- After any change: `npm run format` and `npm run lint`, then `npm run build && npm test`. Lint must be clean. All test files must pass. Add a test file or cases in `tests/` for new behaviour; tests simulate every outside service with Playwright routes.
 - `tests/pw.js` pre-dismisses the first-visit welcome dialog; use it unless the test is about that dialog.
 - Tests load the page from `PAGE` (`tests/site.js`), not file://, and answer its requests with `isSite`/`serveSite`.
 - `docs/how-the-code-works.md` describes the structure. Keep it, the overview at the top of `src/app.js` and the section names in the three source files up to date.

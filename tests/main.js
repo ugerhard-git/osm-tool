@@ -15,7 +15,7 @@ const PL = [
 ];
 const RE = { type: "node", id: 9, lat: -21.1, lon: 55.5, tags: { name: "Reunion Light" } };
 const GROUPED = [A("FR"), RE, A("MT"), ...PL.slice(0, 3), PL[5], A("RE"), RE, A("IT"), PL[3], PL[4]];
-function meta(lat, lng) {
+function meta(lat) {
   const k = lat.toFixed(4);
   if (k === "35.9000")
     return {

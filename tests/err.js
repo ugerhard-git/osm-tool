@@ -1,6 +1,5 @@
 const { chromium } = require("./pw.js");
 const { PAGE, isSite, serveSite } = require("./site.js");
-const path = require("path");
 const H = { "access-control-allow-origin": "*" };
 const cases = {
   timeout: r =>

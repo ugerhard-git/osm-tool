@@ -1,6 +1,5 @@
 const { chromium } = require("./pw.js");
 const { PAGE, isSite, serveSite } = require("./site.js");
-const path = require("path");
 const H = { "access-control-allow-origin": "*" };
 const KEY = "SECRETKEY123",
   BASE = `https://tile.tracestrack.com/overpass/${KEY}/`;
@@ -163,7 +162,7 @@ const els = [{ type: "area", id: 1, tags: { "ISO3166-1": "MT" } }, N(1, 35.9, 14
   );
   // both fail: error names the cause without leaking the key
   state.pub = "timeout";
-  log = await run();
+  await run();
   const card = await p.innerText("#fail");
   const det = await p.textContent("#failDetail");
   console.log("  error:", await p.textContent("#failTitle"), "|", det.replace(/\n/g, " ; ").slice(0, 200));
