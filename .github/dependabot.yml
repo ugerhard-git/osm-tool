@@ -1,4 +1,5 @@
-# Proposes updates for the build packages and the GitHub Actions used here, once a month.
+# Proposes updates for the packages and the GitHub Actions used here, once a month.
+# Security fixes are proposed at once, whatever the settings below say.
 version: 2
 updates:
   - package-ecosystem: npm
@@ -6,7 +7,32 @@ updates:
     schedule:
       interval: monthly
     open-pull-requests-limit: 5
+    # Only propose versions that have been out for a week: bad releases are usually withdrawn by then.
+    cooldown:
+      default-days: 7
+    groups:
+      # Tools that only run while building and testing: one pull request for all their minor and patch
+      # updates. A major update still gets its own pull request, as it may need changes here.
+      # Leaflet, the place catalogue and the font end up in the published page, so they are left out
+      # and each gets a pull request of its own.
+      dev-tools:
+        patterns:
+          - "playwright"
+          - "prettier"
+          - "eslint"
+          - "@eslint/*"
+          - "globals"
+        update-types:
+          - "minor"
+          - "patch"
   - package-ecosystem: github-actions
     directory: /
     schedule:
       interval: monthly
+    cooldown:
+      default-days: 7
+    groups:
+      # All workflow actions in one pull request.
+      actions:
+        patterns:
+          - "*"

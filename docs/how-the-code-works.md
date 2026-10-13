@@ -77,3 +77,13 @@ npm test -- share     # only files whose name starts with "share"
 ```
 
 Each test file prints `PASS …` or `FAIL …` lines and ends with `ALL PASS`. Screenshots of some states are saved in `dist/screens/`. To test something new, copy the setup of a test file close to your feature: it shows how to answer the page's requests to Overpass, taginfo or Google with made-up data.
+
+## Updates
+
+Dependabot (settings in `.github/dependabot.yml`) proposes updates once a month, as pull requests:
+
+- **Development tools** (Playwright, Prettier, ESLint): their minor and patch updates come together in one pull request. A major update comes on its own, as it may need changes here.
+- **Leaflet, the place catalogue and the font:** one pull request each. These end up in the published page, so check the page itself after merging.
+- **GitHub Actions:** together in one pull request.
+
+Only versions that have been out for at least a week are proposed. Security fixes are proposed straight away.
