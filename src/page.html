@@ -35,10 +35,12 @@
     </style>
   </head>
   <body>
+    <!-- Shown instead of the app when another site puts this page in a frame (the check is in the scripts at the end) -->
     <div class="framed" id="framed" hidden>
       <p><b>Lookout cannot be used inside another page.</b></p>
       <p><a id="framedLink" href="./" target="_top" rel="noopener">Open Lookout on its own</a></p>
     </div>
+    <!-- First-visit dialog, also opened by "How it works" (app.js: welcome) -->
     <div class="welcome" id="welcome" hidden>
       <div
         class="welcome-box"
@@ -86,6 +88,7 @@
         <button type="button" class="btn primary" id="welcomeOk">Start</button>
       </div>
     </div>
+    <!-- The app: settings panel on the left, map on the right (stacked on phones) -->
     <div class="app">
       <form class="panel" id="form" autocomplete="off">
         <h1>Lookout</h1>
@@ -95,6 +98,7 @@
         </p>
 
         <fieldset id="fields">
+          <!-- Step 1 when an own Overpass result is loaded; replaces steps 1 and 2 (app.js: your own Overpass result) -->
           <section class="step" id="ownStep" hidden>
             <h2><span class="n">1</span>Your own places</h2>
             <div class="picked" id="ownSummary"></div>
@@ -107,6 +111,7 @@
               Remove these places and search OpenStreetMap instead
             </button>
           </section>
+          <!-- Step 1: kind of place and name (app.js: step 1) -->
           <section class="step" id="stepKind">
             <h2><span class="n">1</span>What should each location look at?</h2>
             <div class="labelrow">
@@ -179,6 +184,7 @@
             </details>
           </section>
 
+          <!-- Step 2: where to search (app.js: step 2) -->
           <section class="step" id="stepWhere">
             <h2><span class="n">2</span>Where?</h2>
             <label class="radio"
@@ -210,6 +216,7 @@
             <div class="msg note" id="scopeNote" hidden></div>
           </section>
 
+          <!-- Step 3: distance, number of locations, tags, map name and API key -->
           <section class="step">
             <h2><span class="n" id="lastStepNo">3</span>How close, and how many?</h2>
             <div class="row">
@@ -309,6 +316,7 @@
           </section>
         </fieldset>
 
+        <!-- Search button, "check again", shared link and messages (app.js: run, shareable links) -->
         <button class="go" id="go" type="submit">Find locations</button>
         <div class="again" id="againBox" hidden>
           <button class="btn" id="again" type="button">Check Street View again on the same places</button>
@@ -317,6 +325,7 @@
         <button class="sharebtn" id="share" type="button">Copy a link to this search</button>
         <div id="message" class="msg" hidden role="alert"></div>
 
+        <!-- Expert panel: the Overpass query, own server, own result (app.js: step 2, your own Overpass server, your own Overpass result) -->
         <details class="help" id="expert">
           <summary>Expert</summary>
           <div class="body">
@@ -436,9 +445,11 @@
         </p>
       </form>
 
+      <!-- Right side: map, overlays and the bar with counters and export (app.js: map, run, export) -->
       <div class="stage" id="stage">
         <div class="mapwrap">
           <div id="map"></div>
+          <!-- List of named locations, opened with "List by name" (app.js: list of named locations) -->
           <aside class="names" id="names" hidden aria-label="Named locations">
             <div class="names-head">
               <strong id="namesTitle">Named locations</strong>
@@ -454,6 +465,7 @@
             <p class="hint" id="namesNote"></p>
           </aside>
         </div>
+        <!-- Overlays on the map: hint before a search, error card, progress while searching -->
         <div class="empty" id="empty">
           <strong>Nothing found yet</strong>Choose a kind of place and select "Find locations".
         </div>
@@ -480,6 +492,7 @@
             </ol>
           </div>
         </div>
+        <!-- Bottom bar: status line, progress, counters, export buttons -->
         <div class="bar">
           <div class="status" aria-live="polite">
             <div class="now" id="now">Ready.</div>
@@ -505,6 +518,7 @@
       </div>
     </div>
 
+    <!-- Scripts. The build fills these in and fingerprints them for the security policy: Leaflet (the map library), the place catalogue with the framing check, and src/app.js -->
     <script>
       /*LEAFLET_JS*/
     </script>

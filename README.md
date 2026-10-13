@@ -57,6 +57,7 @@ The tests drive the page in a headless browser. OpenStreetMap, taginfo and Googl
 | `src/catalog.js`     | Builds the place catalogue from the iD editor presets                                 |
 | `src/build.js`       | Assembles everything into the single file `dist/index.html`, with its security policy |
 | `tests/`             | Browser tests, one file per feature area; `run.js` runs them all                      |
+| `docs/`              | [How the code works](docs/how-the-code-works.md), a guide for developers              |
 | `.github/workflows/` | Tests on every pull request; publishing to GitHub Pages from `main`                   |
 
 ## Publishing (GitHub Pages)

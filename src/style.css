@@ -1,3 +1,12 @@
+/*
+ * Lookout: the page's styles. The build puts them into the page together with Leaflet's own styles.
+ * Sections follow the page from top to bottom and use the same names as src/page.html and src/app.js.
+ * Order matters in a few places, as later rules win over earlier ones of the same strength.
+ */
+
+/* ---------- colours ----------
+   ink: text and dark accents; muted: secondary text; paper: page background; panel: settings panel;
+   line: borders; blue: links and main buttons; amber: found locations and warnings; red: errors. */
 :root {
   --ink: #14213d;
   --muted: #586583;
@@ -11,6 +20,8 @@
   --red: #b3261e;
   --red-soft: #fdecea;
 }
+
+/* ---------- page layout ---------- */
 * {
   box-sizing: border-box;
 }
@@ -70,6 +81,8 @@ fieldset {
 fieldset:disabled {
   opacity: 0.5;
 }
+
+/* ---------- shown inside another site's frame ---------- */
 .framed {
   position: fixed;
   inset: 0;
@@ -86,6 +99,8 @@ fieldset:disabled {
   margin: 0 0 10px;
   font-size: 1.1rem;
 }
+
+/* ---------- "How it works" and the first-visit dialog ---------- */
 .howbtn {
   font: inherit;
   border: 0;
@@ -173,6 +188,8 @@ fieldset:disabled {
   padding: 11px 26px;
   font-size: 1.05rem;
 }
+
+/* ---------- steps and form fields ---------- */
 .step {
   border-top: 2px solid var(--ink);
   padding: 16px 0 22px;
@@ -331,7 +348,7 @@ a:focus-visible {
   flex: none;
 }
 
-/* kind picker */
+/* ---------- step 1: kind picker ---------- */
 .combo {
   position: relative;
 }
@@ -418,7 +435,7 @@ a:focus-visible {
   border-color: var(--blue);
 }
 
-/* scope + countries */
+/* ---------- step 2: where ---------- */
 .radio {
   display: flex;
   gap: 10px;
@@ -503,6 +520,7 @@ a:focus-visible {
   border-bottom: 1px solid var(--line);
 }
 
+/* ---------- help boxes and the expert panel (query, own server, own result) ---------- */
 details.help {
   margin-top: 14px;
   border: 1.5px solid var(--line);
@@ -627,6 +645,8 @@ table.syntax td {
 table.syntax td:first-child {
   margin-bottom: 2px;
 }
+
+/* ---------- search button, "check again", shared link, messages, footer ---------- */
 a {
   color: var(--blue-dark);
 }
@@ -714,6 +734,7 @@ a {
   color: var(--muted);
 }
 
+/* ---------- map and the list of named locations ---------- */
 .mapwrap {
   flex: 1;
   min-height: 300px;
@@ -832,6 +853,8 @@ a {
 .names #namesNote {
   margin: 8px 0 0;
 }
+
+/* ---------- overlays on the map: hint, error card, progress card ---------- */
 .stage.listing .live.corner {
   right: 364px;
 }
@@ -852,7 +875,6 @@ a {
   margin-bottom: 4px;
 }
 
-/* live status card on the map */
 .failcard {
   position: absolute;
   z-index: 1200;
@@ -1009,6 +1031,7 @@ a {
   }
 }
 
+/* ---------- bottom bar: status line, progress, counters, export ---------- */
 .bar {
   background: var(--panel);
   border-top: 1px solid var(--line);
@@ -1096,6 +1119,8 @@ a {
   color: var(--muted);
   margin-top: 3px;
 }
+
+/* ---------- buttons ---------- */
 .btn {
   font: inherit;
   font-weight: 600;
@@ -1114,6 +1139,8 @@ a {
   opacity: 0.4;
   cursor: default;
 }
+
+/* ---------- map popups ---------- */
 .leaflet-container {
   font-family: inherit;
 }
@@ -1155,6 +1182,8 @@ a {
 .pop .rm:hover {
   color: #7d1a15;
 }
+
+/* ---------- small shared rules ---------- */
 .undo {
   font: inherit;
   font-weight: 600;
@@ -1168,6 +1197,8 @@ a {
 [hidden] {
   display: none !important;
 }
+
+/* ---------- phones and narrow windows ---------- */
 @media (max-width: 860px) {
   .app {
     grid-template-columns: 1fr;
@@ -1184,6 +1215,8 @@ a {
     font-size: 2rem;
   }
 }
+
+/* ---------- less motion for people who ask their system for it ---------- */
 @media (prefers-reduced-motion: reduce) {
   .track i,
   fieldset {
