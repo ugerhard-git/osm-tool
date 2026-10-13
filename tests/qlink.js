@@ -43,6 +43,12 @@ const { PAGE, isSite, serveSite } = require("./site.js");
     want(await st(p)) && /shared link/.test(await p.textContent("#message")),
     "still applied after closing the welcome",
   );
+  // links made before the kind and name tag options were removed still open
+  p = await open(file + "?k=man_made%3Dlighthouse&s=pick&c=DK-IS&d=50&t=1000&g=1&gn=1");
+  ok(
+    want(await st(p)) && !p.errs.length && !(await p.$("#tags")) && !(await p.$("#tagName")),
+    "older links with the removed tag options still work: " + p.errs.join(" | "),
+  );
   // old-style link after "#"
   p = await open(file + "#k=man_made%3Dlighthouse&s=pick&c=DK-IS&d=50&t=1000");
   ok(want(await st(p)), 'older "#" links still work');

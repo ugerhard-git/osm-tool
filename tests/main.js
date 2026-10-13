@@ -279,7 +279,10 @@ const done = page =>
         by.PANO_ID_0000_R.extra.tags.join() === "Réunion",
       "heading + default tags: country only",
     );
-    ok((await page.isChecked("#tagCountry")) && !(await page.isChecked("#tags")), "tag defaults");
+    ok(
+      (await page.isChecked("#tagCountry")) && !(await page.$("#tags")) && !(await page.$("#tagName")),
+      "country tag on by default; kind and name tag options are gone",
+    );
     console.log(await page.textContent("#tally"), "|", await page.textContent("#now"));
     await page.screenshot({ path: require("path").join(__dirname, "../dist/screens/b4.png") });
     ok(log.errors.length === 0, "no page errors " + log.errors.join(" | "));
@@ -382,33 +385,14 @@ const done = page =>
     ok((await page.evaluate(() => navigator.clipboard.readText())) === qt, "copy query");
     await page.evaluate(() => document.querySelector(".panel").scrollTo(0, 99999));
     await page.screenshot({ path: require("path").join(__dirname, "../dist/screens/e1.png") });
-    // all tags on, then country off
-    await page.check("#tags");
-    await page.click("#go");
-    await done(page);
-    ok(
-      JSON.parse(await page.evaluate(() => exportJson()))
-        .customCoordinates.find(c => c.panoId === "PANO_ID_0000_D")
-        .extra.tags.join() === "Lighthouse,Italy",
-      "all tags on",
-    );
+    // country tag off: no tags at all
     await page.uncheck("#tagCountry");
     await page.click("#go");
     await done(page);
     ok(
-      JSON.parse(await page.evaluate(() => exportJson()))
-        .customCoordinates.find(c => c.panoId === "PANO_ID_0000_D")
-        .extra.tags.join() === "Lighthouse",
-      "country tag off",
-    );
-    await page.uncheck("#tags");
-    await page.click("#go");
-    await done(page);
-    ok(
       JSON.parse(await page.evaluate(() => exportJson())).customCoordinates.every(c => !("extra" in c)),
-      "no tags at all: no extra field",
+      "country tag off: no tags, no extra field",
     );
-    await page.check("#tags");
     await page.check("#tagCountry");
     // pick scope with uncovered country
     await page.check("input[name=scope][value=pick]");
@@ -458,10 +442,8 @@ const done = page =>
     );
     await page.check("input[name=scope][value=world]");
     ok(
-      JSON.parse(await page.evaluate(() => exportJson())).customCoordinates.every(
-        c => c.extra.tags.length === 1,
-      ),
-      "world: no country tag",
+      JSON.parse(await page.evaluate(() => exportJson())).customCoordinates.every(c => !("extra" in c)),
+      "world: no country tag, so no tags at all",
     );
     // raw tag
     await page.fill("#kind", "amenity=pub|bar, name=*");
@@ -489,10 +471,10 @@ const done = page =>
         .includes('node["man_made"="lighthouse"]["name"~"Liberty|liberté|St\\\\. \\"X\\"",i](area.c);'),
       "kind + name filter: " + /node[^;]*/.exec(log.overpass.at(-1))[0],
     );
+    const lj = JSON.parse(await page.evaluate(() => exportJson()));
     ok(
-      JSON.parse(await page.evaluate(() => exportJson())).customCoordinates[0].extra.tags[0] ===
-        "Lighthouse: Liberty",
-      "label in tags",
+      /^Lighthouse: Liberty/.test(lj.name) && !JSON.stringify(lj.customCoordinates).includes("Liberty"),
+      "search label names the map, but is not added as a tag: " + lj.name,
     );
     await page.fill("#kind", "");
     await page.fill("#nameHas", "alpaka, alpaca");
@@ -613,7 +595,6 @@ const done = page =>
     await page.keyboard.type("lighthouse", { delay: 20 });
     await page.keyboard.press("Enter");
     ok((await page.inputValue("#kind")) === "Phare", "English word works in French mode");
-    await page.check("#tags");
     await page.click("#go");
     await done(page);
     ok(
@@ -626,7 +607,7 @@ const done = page =>
     ok(
       j.customCoordinates.length === 3 &&
         j.name === "Phare (World)" &&
-        j.customCoordinates[0].extra.tags[0] === "Phare",
+        j.customCoordinates.every(c => !(c.extra?.tags || []).includes("Phare")),
       "fallback results " + j.name,
     );
     ok(log.errors.length === 0, "no page errors " + log.errors.join(" | "));

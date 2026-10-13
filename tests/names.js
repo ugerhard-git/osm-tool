@@ -49,22 +49,20 @@ const els = [
   await p.fill("#kind", "Lighthouse");
   await p.keyboard.press("Enter");
   ok(
-    (await p.isDisabled("#namesOpen")) && !(await p.isChecked("#tagName")) && (await p.isHidden("#names")),
-    "list button disabled and name tag off at start",
+    (await p.isDisabled("#namesOpen")) && (await p.isHidden("#names")),
+    "list button disabled and list hidden at start",
   );
   await p.check("input[name=scope][value=pick]");
   await p.check("#countries input[value=MT]");
   await p.check("#countries input[value=IT]");
-  await p.check("#tagName");
   await p.click("#go");
   await p.waitForFunction(() => !running && /Done/.test(document.getElementById("now").textContent));
   const j = JSON.parse(await p.evaluate(() => exportJson()));
   const tags = Object.fromEntries(j.customCoordinates.map(c => [c.panoId, c.extra.tags.join(" | ")]));
   console.log(" ", JSON.stringify(Object.values(tags)));
   ok(
-    Object.values(tags).includes("Faro di Fiumicino | Italy") &&
-      Object.values(tags).filter(t => t === "Malta" || t === "Italy").length === 2,
-    "name tag added where a name exists, none for unnamed places",
+    Object.values(tags).every(t => t === "Malta" || t === "Italy"),
+    "only the country tag: place names are not added as tags",
   );
   ok(
     (await p.textContent("#namesOpen")) === "List by name (4)" && !(await p.isDisabled("#namesOpen")),

@@ -32,8 +32,8 @@
  *   running      true while a search runs; abort.abort() stops it
  *
  * SAVED IN THE BROWSER (localStorage, each name starts with "lookout2.", see `store`)
- *   kind, nameHas, lang, countries, scope, maxDist, minDist, target, official, tagKind, tagCountry,
- *   tagName, tagRoad, expert (whether that panel is open) and welcomed (first-visit dialog seen).
+ *   kind, nameHas, lang, countries, scope, maxDist, minDist, target, official, tagCountry, tagRoad,
+ *   expert (whether that panel is open) and welcomed (first-visit dialog seen).
  *   The own server is "lookout2.osmOwn" in localStorage or, if not remembered, sessionStorage.
  *   A visitor's own Google key is only kept in sessionStorage ("lookout2.key"), never on disk.
  *   Saved values and shared links can be edited by anyone, so everything read back is checked first.
@@ -197,10 +197,11 @@ const keyStore = {
     } catch {}
   },
 };
-// Older versions kept the key on disk; remove it.
+// Remove what older versions saved and no longer use: the key (once kept on disk) and the settings of
+// the removed "kind of place" and "name" tag options.
 try {
-  localStorage.removeItem("lookout2.key");
-  localStorage.removeItem("lookout.key");
+  for (const k of ["lookout2.key", "lookout.key", "lookout2.tagKind", "lookout2.tagName"])
+    localStorage.removeItem(k);
 } catch {}
 let regionNames;
 try {
@@ -823,8 +824,6 @@ for (const id of ["maxDist", "minDist", "target"]) {
 }
 $("official").checked = store.get("official", true);
 $("tagCountry").checked = store.get("tagCountry", true);
-$("tags").checked = store.get("tagKind", false);
-$("tagName").checked = store.get("tagName", false);
 $("tagRoad").checked = store.get("tagRoad", false);
 {
   const s = store.get("scope", "pick");
@@ -1182,9 +1181,7 @@ function shareLink() {
   if (+$("minDist").value > 0) q.set("m", $("minDist").value);
   q.set("t", $("target").value);
   if (!$("official").checked) q.set("o", "0");
-  if ($("tags").checked) q.set("g", "1");
   if (!$("tagCountry").checked) q.set("gc", "0");
-  if ($("tagName").checked) q.set("gn", "1");
   if ($("tagRoad").checked) q.set("gr", "1");
   const mn = $("mapName").value.trim();
   if (mn) q.set("name", mn);
@@ -1239,9 +1236,7 @@ function applyLink() {
   num("t", 1, 100000, "target");
   if (!q.has("m")) $("minDist").value = 0;
   $("official").checked = q.get("o") !== "0";
-  $("tags").checked = q.get("g") === "1";
   $("tagCountry").checked = q.get("gc") !== "0";
-  $("tagName").checked = q.get("gn") === "1";
   $("tagRoad").checked = q.get("gr") === "1";
   $("mapName").value = cleanText(q.get("name"), 100);
   return true;
@@ -2477,9 +2472,7 @@ async function startSearch(reuse) {
   const minDist = Math.max(0, +$("minDist").value || 0);
   const target = Math.max(1, Math.floor(+$("target").value || 1000));
   const official = $("official").checked,
-    addTags = $("tags").checked,
     addCountry = $("tagCountry").checked,
-    addName = $("tagName").checked,
     addRoad = $("tagRoad").checked;
   const sc = scope(),
     label = ownRun ? ownRun.label : searchLabel();
@@ -2508,9 +2501,7 @@ async function startSearch(reuse) {
 
   for (const id of ["maxDist", "minDist", "target"]) store.set(id, $(id).value);
   store.set("official", official);
-  store.set("tagKind", addTags);
   store.set("tagCountry", addCountry);
-  store.set("tagName", addName);
   store.set("tagRoad", addRoad);
   if (!GOOGLE_API_KEY) keyStore.set(key);
 
@@ -2618,8 +2609,6 @@ async function startSearch(reuse) {
     let next = 0,
       lastPaint = 0;
     const tagList = loc => [
-      ...(addTags ? [label] : []),
-      ...(addName && loc.poi.name ? [loc.poi.name] : []),
       ...(addCountry && loc.poi.cc ? [countryName(loc.poi.cc)] : []),
       ...(addRoad && loc.road === "has"
         ? ["Has road name"]
