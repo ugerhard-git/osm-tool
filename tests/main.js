@@ -126,6 +126,7 @@ const done = page => page.waitForFunction(() => !running && !/Ready/.test(docume
     ok((await page.evaluate(()=>results.length))===3 && !/removed by you/.test(await page.textContent('#tally')) && (await page.evaluate(()=>layer.getLayers().length))===9, 'undo restores');
     // expert query panel
     ok(!(await page.evaluate(()=>document.getElementById('expert').open)), 'expert panel closed by default');
+    ok((await page.textContent('#expert summary')).trim()==='Expert', 'expert panel heading is just "Expert"');
     await page.click('#expert summary');
     const qt = await page.inputValue('#queryText'); console.log(qt.replace(/\(AD\|.*ZA\)/,'(AD|…|ZA)'));
     ok(/timeout:180/.test(qt) && /foreach\.all->\.c\(/.test(qt) && /\^\(([A-Z|]+)\)\$/.exec(qt)[1].split('|').length===119, 'expert query is the combined 119-country query');
