@@ -1,4 +1,92 @@
 "use strict";
+/*
+ * Lookout: the app code.
+ *
+ * Lookout finds Google Street View spots near OpenStreetMap places of one kind (lighthouses, castles, …)
+ * and exports them as a map-making.app map, each camera turned towards its place. Everything runs in the
+ * visitor's browser; there is no server of our own. The build (src/build.js) puts this file, the styles
+ * and the markup into one page.
+ *
+ * HOW A SEARCH RUNS (see startSearch)
+ *   1. Step 1 sets `kind` (a tag such as historic=castle) and/or words the name must contain.
+ *      Step 2 sets where: chosen countries, all Street View countries, or the whole world.
+ *   2. buildQuery() writes the Overpass query. fetchPlaces() sends it in parts of a few countries
+ *      (makeParts, halve) through overpass(), which tries the public servers and the user's own server.
+ *      mergeElements() turns the answers into Place objects.
+ *      Instead of steps 1 and 2, the user can load their own Overpass result (parseOwn), or check the
+ *      places of the previous search again with other settings (lastFetch).
+ *   3. The places are shuffled, then lookup() asks Google for the nearest panorama of each one.
+ *      officialNearby() looks again when the nearest panorama is a photo uploaded by someone else, and
+ *      roadInfo() checks for a street name when that tag is wanted.
+ *   4. Each accepted panorama becomes a Location: drawn on the map (drawLocation), listed by name
+ *      (renderNames) and exported (exportJson). paint() keeps the counters and messages up to date.
+ *
+ * MAIN SHARED STATE
+ *   kind         the kind of place from step 1: { label, tag, raw?, count? }, or null
+ *   selected     Set of the country codes ticked in step 2
+ *   ownResult    the user's own Overpass result once loaded (see parseOwn), else null
+ *   osmOwn       the user's own Overpass server: { url, mode: "first" | "fallback" }, or null
+ *   results      the Locations found so far; `removed` holds the ones the user took out, for undo
+ *   searchStats  counters for the current search (see emptyStats)
+ *   lastFetch    the places of the last OpenStreetMap search, kept for "check again"
+ *   running      true while a search runs; abort.abort() stops it
+ *
+ * SAVED IN THE BROWSER (localStorage, each name starts with "lookout2.", see `store`)
+ *   kind, nameHas, lang, countries, scope, maxDist, minDist, target, official, tagKind, tagCountry,
+ *   tagName, tagRoad, expert (whether that panel is open) and welcomed (first-visit dialog seen).
+ *   The own server is "lookout2.osmOwn" in localStorage or, if not remembered, sessionStorage.
+ *   A visitor's own Google key is only kept in sessionStorage ("lookout2.key"), never on disk.
+ *   Saved values and shared links can be edited by anyone, so everything read back is checked first.
+ *
+ * GROUND RULES
+ *   - The page's security policy only runs scripts it knows, so events are wired up here in code;
+ *     onclick="…" in the HTML would not run.
+ *   - Text from outside (OpenStreetMap, taginfo, Google, links, saved values) is put on the page with
+ *     textContent, or passed through esc() before it goes into innerHTML.
+ *   - The sections below follow the page from top to bottom: data, helpers, step 1, step 2, own server,
+ *     own result, shared links, map, list of names, OpenStreetMap, Street View, the search, export,
+ *     first-visit dialog. src/page.html and src/style.css use the same section names.
+ */
+
+/**
+ * A place from OpenStreetMap that a location should look at.
+ * @typedef {object} Place
+ * @property {number} id         OpenStreetMap id (unique together with type)
+ * @property {"node"|"way"|"relation"} type
+ * @property {number} lat
+ * @property {number} lng        for ways and relations: the centre OpenStreetMap gives
+ * @property {string} [cc]       two-letter country code, if known
+ * @property {string} name       English name if there is one, else the local name, else ""
+ * @property {object} [dot]      its faint candidate dot on the map (Leaflet layer)
+ * @property {{why: string, panoId?: string, heading: number}} [miss]  why it was left out
+ */
+/**
+ * A Street View spot that made it into the results.
+ * @typedef {object} Location
+ * @property {number} lat
+ * @property {number} lng
+ * @property {number} heading    compass direction from the camera to the place, 0–360
+ * @property {string} panoId     Google's panorama id
+ * @property {string} date       photo date "YYYY-MM" or "YYYY", or ""
+ * @property {number} dist       metres from the camera to the place
+ * @property {Place} poi         the place it looks at
+ * @property {string[]} tags     tags for the export
+ * @property {"has"|"none"|"unknown"} [road]  whether a street name is shown, if checked
+ * @property {string} [roadName]
+ * @property {object[]} [layers] its line, place dot and marker on the map
+ */
+/**
+ * Google's answer for one lookup, cleaned by cleanPano().
+ * @typedef {object} PanoAnswer
+ * @property {string} status     "OK", "ZERO_RESULTS", "REQUEST_DENIED", "NETWORK", "MALFORMED", …
+ * @property {number} [lat]
+ * @property {number} [lng]
+ * @property {string} [panoId]
+ * @property {string} [copyright] "© Google" for official coverage, else the uploader's name
+ * @property {string} [date]
+ * @property {string} [detail]   Google's error message, if any
+ */
+
 /* ---------- data ---------- */
 const LANGS = { en: "English", de: "Deutsch", fr: "Français", es: "Español", pt: "Português" };
 const EXAMPLES = [
@@ -38,83 +126,47 @@ const CODES = (
   "RU RW SA SB SC SD SE SG SH SI SJ SK SL SM SN SO SR SS ST SV SX SY SZ TC TD TG TH TJ TK TL TM TN TO TR TT TV TW TZ " +
   "UA UG US UY UZ VA VC VE VG VI VN VU WF WS XK YE YT ZA ZM ZW"
 ).split(" ");
-/* Countries whose OpenStreetMap area also contains other listed territories. */
+/* Countries whose OpenStreetMap area also contains other listed territories (France contains Réunion,
+   for example). A place found in both keeps the more specific territory; see mergeElements. */
 const PARENTS = new Set(["FR", "NL", "DK", "GB", "US", "AU", "NO", "FI", "CN", "NZ"]);
+/* Public Overpass servers. Searches start at a different one each time and move on when one fails. */
 const OVERPASS = [
   "https://overpass-api.de/api/interpreter",
   "https://overpass.private.coffee/api/interpreter",
   "https://overpass.kumi.systems/api/interpreter",
 ];
 const TAGINFO = "https://taginfo.openstreetmap.org/api/4/";
-const PARALLEL = 12;
+const PARALLEL = 12; // Street View lookups running at the same time
 const WORLD_TIMEOUT = 180; // seconds the OpenStreetMap server may spend on a whole-world search
 const PART_TIMEOUT = 90; // seconds it may spend on one part of a country search
 const PART_WEIGHT = 15; // how much goes into one part; see COUNTRY_WEIGHT
 const OSM_PARALLEL = 2; // parts requested at the same time
 const RATE_WAIT = 20000; // ms to pause when the servers ask to slow down
 /* Rough cost of searching a country (size and amount of map data). Unlisted countries count 1. */
+// prettier-ignore
 const COUNTRY_WEIGHT = {
-  US: 8,
-  RU: 8,
-  CA: 8,
-  BR: 8,
-  AU: 8,
-  DE: 5,
-  FR: 5,
-  IN: 5,
-  JP: 5,
-  GB: 3,
-  IT: 3,
-  ES: 3,
-  PL: 3,
-  MX: 3,
-  AR: 3,
-  ID: 3,
-  KZ: 3,
-  SE: 2,
-  NO: 2,
-  FI: 2,
-  UA: 2,
-  TR: 2,
-  ZA: 2,
-  NL: 2,
-  CZ: 2,
-  AT: 2,
-  CH: 2,
-  BE: 2,
-  RO: 2,
-  PE: 2,
-  CO: 2,
-  CL: 2,
-  TH: 2,
-  PH: 2,
-  MY: 2,
-  NZ: 2,
-  GR: 2,
-  PT: 2,
-  HU: 2,
-  MN: 2,
-  NG: 2,
-  KE: 2,
-  BO: 2,
-  BW: 2,
-  NA: 2,
-  CN: 8,
-  DZ: 2,
-  SA: 2,
-  IR: 2,
-  EG: 2,
+  US: 8, RU: 8, CA: 8, BR: 8, AU: 8, CN: 8,
+  DE: 5, FR: 5, IN: 5, JP: 5,
+  GB: 3, IT: 3, ES: 3, PL: 3, MX: 3, AR: 3, ID: 3, KZ: 3,
+  SE: 2, NO: 2, FI: 2, UA: 2, TR: 2, ZA: 2, NL: 2, CZ: 2, AT: 2, CH: 2, BE: 2, RO: 2,
+  PE: 2, CO: 2, CL: 2, TH: 2, PH: 2, MY: 2, NZ: 2, GR: 2, PT: 2, HU: 2, MN: 2, NG: 2,
+  KE: 2, BO: 2, BW: 2, NA: 2, DZ: 2, SA: 2, IR: 2, EG: 2,
 };
 const countryWeight = c => COUNTRY_WEIGHT[c] || 1;
+/* Total weight of a list of country codes. */
 const weightOf = codes => codes.reduce((n, c) => n + countryWeight(c), 0);
 const TOO_MANY = 150000; // above this many places worldwide, the user must choose countries
 const MIN_USES = 3; // live tag suggestions used fewer times than this are hidden
 const MAX_DOTS = 4000; // faint candidate dots drawn on the map
 
 /* ---------- helpers ---------- */
+/* The page element with this id. */
 const $ = id => document.getElementById(id);
+/* A number with thousands separators: 12345 -> "12,345". */
 const fmt = n => n.toLocaleString("en");
 const sleep = ms => new Promise(r => setTimeout(r, ms));
+/* Settings saved in this browser, under "lookout2.<name>". get() returns the default d when nothing
+   is saved or storage is blocked (private windows); set() quietly does nothing then. */
 const store = {
   get(k, d) {
     try {
@@ -145,6 +197,7 @@ const keyStore = {
     } catch {}
   },
 };
+// Older versions kept the key on disk; remove it.
 try {
   localStorage.removeItem("lookout2.key");
   localStorage.removeItem("lookout.key");
@@ -153,6 +206,7 @@ let regionNames;
 try {
   regionNames = new Intl.DisplayNames(["en"], { type: "region" });
 } catch {}
+/* English name of a country code, or the code itself when the browser does not know it. */
 const countryName = c => {
   try {
     const n = regionNames && regionNames.of(c);
@@ -166,6 +220,7 @@ const COUNTRIES = CODES.map(c => ({ code: c, name: countryName(c) })).sort((a, b
   a.name.localeCompare(b.name),
 );
 const toRadians = d => (d * Math.PI) / 180;
+/* Distance in metres between two points on the earth (haversine formula, mean earth radius). */
 function distance(aLat, aLng, bLat, bLng) {
   const dLat = toRadians(bLat - aLat),
     dLng = toRadians(bLng - aLng);
@@ -173,6 +228,7 @@ function distance(aLat, aLng, bLat, bLng) {
     Math.sin(dLat / 2) ** 2 + Math.cos(toRadians(aLat)) * Math.cos(toRadians(bLat)) * Math.sin(dLng / 2) ** 2;
   return 6371008.8 * 2 * Math.asin(Math.min(1, Math.sqrt(h)));
 }
+/* Compass direction from point a to point b, in degrees: 0 north, 90 east. Used as the camera heading. */
 function bearing(aLat, aLng, bLat, bLng) {
   const y = Math.sin(toRadians(bLng - aLng)) * Math.cos(toRadians(bLat));
   const x =
@@ -180,6 +236,7 @@ function bearing(aLat, aLng, bLat, bLng) {
     Math.sin(toRadians(aLat)) * Math.cos(toRadians(bLat)) * Math.cos(toRadians(bLng - aLng));
   return ((Math.atan2(y, x) * 180) / Math.PI + 360) % 360;
 }
+/* Puts an array in random order, in place (Fisher–Yates). */
 function shuffle(a) {
   for (let i = a.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
@@ -187,13 +244,17 @@ function shuffle(a) {
   }
   return a;
 }
+/* Makes text safe to put inside HTML: & < > " ' ` become entities. */
 const esc = s =>
   String(s).replace(
     /[&<>"'`]/g,
     c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;", "`": "&#96;" })[c],
   );
+/* A string from outside, cut to max characters; anything that is not a string becomes "". */
 const cleanText = (v, max = 200) => (typeof v === "string" ? v.slice(0, max) : "");
+/* True for a real number between lo and hi. */
 const inRange = (n, lo, hi) => typeof n === "number" && Number.isFinite(n) && n >= lo && n <= hi;
+/* Lower case without accents, for matching: "Château" -> "chateau". */
 const foldAccents = s => s.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
 
 /* "key=value, key2=a|b, key3=*" -> list of {key, values|null}. Throws a readable message. */
@@ -221,7 +282,9 @@ function parseTags(text) {
     };
   });
 }
+/* A string quoted for an Overpass query. */
 const quoteOql = s => '"' + s.replace(/\\/g, "\\\\").replace(/"/g, '\\"') + '"';
+/* The words from "Name contains" in step 1. */
 const nameWords = () =>
   $("nameHas")
     .value.split(/[,|\n]/)
@@ -235,11 +298,13 @@ function nameFilter() {
   if (short) throw new Error(`"${short}" is too short for a name search. Use three letters or more.`);
   return `["name"~${quoteOql(w.map(x => x.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|"))},i]`;
 }
+/* Short description of the search, used for the map name and tags: "Castle: Neuschwanstein". */
 function searchLabel() {
   const w = nameWords(),
     n = w.length ? w[0].charAt(0).toUpperCase() + w[0].slice(1) : "";
   return kind ? (n ? `${kind.label}: ${n}` : kind.label) : n;
 }
+/* Overpass filter for the tags of a kind of place: "historic=castle, ruins=yes" -> ["historic"="castle"]["ruins"="yes"]. */
 function tagFilter(text) {
   return parseTags(text)
     .map(({ key, values }) => {
@@ -265,6 +330,9 @@ const hostOf = u => {
 /* ---------- catalogue search ---------- */
 let lang = store.get("lang", null) || (navigator.language || "en").slice(0, 2).toLowerCase();
 if (typeof lang !== "string" || !Object.hasOwn(LANGS, lang)) lang = "en"; // stored value: only the five known languages
+/* The place catalogue (CAT, built from the iD editor presets) comes from the build:
+   CAT.t is the list of tags, CAT.en, CAT.de, … the names in each language, with search words after tabs.
+   index() prepares one language for searching, once. */
 const indexCache = {};
 function index(l) {
   if (!Object.hasOwn(LANGS, l)) l = "en";
@@ -273,10 +341,12 @@ function index(l) {
     return { name: parts[0], n: foldAccents(parts[0]), terms: parts.slice(1).map(foldAccents) };
   }));
 }
+/* The catalogue name of a tag in the current language, or null. */
 const catName = tag => {
   const i = CAT.t.indexOf(tag);
   return i < 0 ? null : index(lang)[i].name;
 };
+/* How well a catalogue entry matches what was typed: 0 is best, -1 is no match. */
 function scoreEntry(e, q) {
   if (e.n === q) return 0;
   if (e.n.startsWith(q)) return 1;
@@ -287,6 +357,7 @@ function scoreEntry(e, q) {
   if (q.length >= 4 && e.terms.some(t => t.includes(q))) return 5;
   return -1;
 }
+/* Best catalogue matches for what was typed: [{ label, tag }]. English names count too, slightly lower. */
 function searchCatalogue(text, limit = 8) {
   const q = foldAccents(text.trim());
   if (q.length < 2) return [];
@@ -315,13 +386,18 @@ function searchCatalogue(text, limit = 8) {
 }
 
 /* ---------- taginfo (live) ---------- */
+/* Keys that describe a place rather than say what it is (name, address, source, …). Suggestions with
+   these keys are hidden. */
 const JUNK_KEY =
   /^(name|addr|source|note|description|ref|operator|brand|network|website|url|contact|wikipedia|wikidata|is_in|destination|fixme|comment|image|email|phone|opening_hours|created_by|tiger|gnis|nhd|import|start_date|type|layer|surface|access|service)\b|name$|:name|^.*:(source|ref|note)$/i;
 const SAFE_KEY = /^[A-Za-z0-9_:.-]{1,60}$/;
+/* A tag value as a label: "fast_food" -> "Fast food". */
 const tagValueLabel = v => {
   const s = v.replace(/_/g, " ");
   return s.charAt(0).toUpperCase() + s.slice(1);
 };
+/* Live suggestions from taginfo, the statistics site of OpenStreetMap: tags whose value or key matches
+   what was typed, most used first: [{ label, tag, count }]. Returns [] when taginfo cannot be reached. */
 async function taginfoSearch(text, signal) {
   const qs = encodeURIComponent(text.trim().toLowerCase().replace(/\s+/g, "_"));
   const get = async u => {
@@ -369,6 +445,7 @@ async function taginfoSearch(text, signal) {
   return [...a, ...b].sort((x, y) => y.count - x.count);
 }
 const countCache = new Map();
+/* How often one tag is used worldwide, from taginfo. For several values (a|b) the counts are added. */
 async function countPart({ key, values }) {
   const one = async v => {
     const u =
@@ -383,7 +460,8 @@ async function countPart({ key, values }) {
   const counts = await Promise.all((values || [null]).map(one));
   return counts.reduce((a, b) => a + b, 0);
 }
-/* Upper bound for how many places match: the rarest of the combined tags. */
+/* Upper bound for how many places match: the rarest of the combined tags. Resolves to null when
+   taginfo cannot tell. Cached, as the same tag is counted again on every change in step 1. */
 function worldCount(tag) {
   if (!countCache.has(tag)) {
     countCache.set(
@@ -417,6 +495,7 @@ for (const [code, name] of Object.entries(LANGS)) {
 }
 $("lang").value = lang;
 
+/* Shows the suggestion list under the field: catalogue matches, then taginfo matches. */
 function renderSuggest(cat, more, loading) {
   items = [...cat, ...more];
   if (!items.length && !loading) {
@@ -455,6 +534,8 @@ function closeSuggest() {
   searchAbort?.abort();
   clearTimeout(searchTimer);
 }
+/* Typing in "Kind of place": catalogue matches at once, taginfo matches after a short pause (350 ms)
+   so that not every keystroke goes to taginfo. searchSeq drops answers that arrive after newer typing. */
 function onKindInput() {
   const text = kindEl.value;
   kind = null;
@@ -493,12 +574,14 @@ function rawKind() {
   }
   renderPicked();
 }
+/* A suggestion was picked. */
 function choose(it) {
   kind = { label: it.label, tag: it.tag };
   kindEl.value = it.label;
   closeSuggest();
   renderPicked();
 }
+/* Saves step 1 and shows below it what will be searched, with the worldwide count from taginfo. */
 function renderPicked() {
   const el = $("picked"),
     words = nameWords();
@@ -602,8 +685,10 @@ $("lang").onchange = () => {
 
 /* ---------- step 2: where ---------- */
 const selected = new Set(store.get("countries", []).filter(c => CODES.includes(c)));
+/* Where to search: "pick" (chosen countries), "cov" (all Street View countries) or "world". */
 const scope = () => document.querySelector("input[name=scope]:checked").value;
 $("covHint").textContent = `The ${COVERAGE.size} countries and territories Google has driven.`;
+/* Draws the country list and the chips of chosen countries, and saves the choice. */
 function renderCountries() {
   const q = $("countrySearch").value.trim().toLowerCase();
   const list = COUNTRIES.filter(c => !q || c.name.toLowerCase().includes(q) || c.code.toLowerCase() === q);
@@ -624,6 +709,7 @@ function renderCountries() {
   store.set("countries", [...selected]);
   renderScope();
 }
+/* Shows the country list only for "pick", and warns when the area has no official coverage. */
 function renderScope() {
   const s = scope();
   $("pickBox").hidden = s !== "pick";
@@ -665,6 +751,7 @@ $("chips").onclick = e => {
     renderCountries();
   }
 };
+/* Fills the Overpass query into the expert panel, with a link to Overpass Turbo. */
 function renderQuery() {
   const box = $("queryText"),
     link = $("turbo");
@@ -700,6 +787,7 @@ $("copyQuery").onclick = async () => {
 };
 $("expert").open = store.get("expert", false);
 $("expert").ontoggle = () => store.set("expert", $("expert").open);
+/* Keeps the expert query and the suggested map name up to date. */
 function suggestName() {
   renderQuery();
   const s = scope();
@@ -728,7 +816,7 @@ $("targetInfoBtn").onclick = () => {
   $("targetInfoBtn").setAttribute("aria-expanded", String(open));
 };
 
-// restore saved settings
+// Restore saved settings. Every value is checked before use.
 for (const id of ["maxDist", "minDist", "target"]) {
   const v = store.get(id, null);
   if (v !== null) $(id).value = v;
@@ -759,6 +847,7 @@ if (kind && kind.tag) {
 } else kind = null;
 
 /* ---------- your own Overpass server ---------- */
+/* Where the own server is kept: localStorage if "remember" is on, else sessionStorage (this tab only). */
 const srvStore = {
   load() {
     for (const st of [() => localStorage, () => sessionStorage]) {
@@ -808,6 +897,8 @@ function serverCandidates(clean) {
     q = u.search;
   return [base + "api/interpreter" + q, base + "interpreter" + q];
 }
+/* Sends a tiny query to check that a server answers like Overpass. Returns { ok, why?, maybe? };
+   maybe means the address looks right but the server is limiting requests just now. */
 async function testServer(url) {
   const ctl = new AbortController(),
     timer = setTimeout(() => ctl.abort(), 20000);
@@ -848,6 +939,7 @@ async function testServer(url) {
   }
 }
 const srvMode = () => document.querySelector("input[name=srvMode]:checked").value;
+/* Shows which own server is in use and how. */
 function renderServer() {
   const st = $("srvStatus");
   st.hidden = !osmOwn;
@@ -931,6 +1023,7 @@ $("srvRemember").onchange = srvResave;
 
 /* ---------- your own Overpass result: state ---------- */
 let ownResult = null; // { places, noPosition, lines, worked, hasCc, countries, source }
+/* The country tag needs a country per place, which "Whole world" and some own results do not have. */
 function updateCountryTag() {
   const off = ownResult ? !ownResult.hasCc : scope() === "world";
   $("tagCountry").disabled = off;
@@ -947,6 +1040,7 @@ function updateCountryTag() {
     );
   }
 }
+/* Number of the settings step, which moves up when an own result replaces steps 1 and 2. */
 const lastStep = () => (ownResult ? 2 : 3);
 function emptyText(title, body) {
   const e = $("empty");
@@ -955,6 +1049,7 @@ function emptyText(title, body) {
   t.textContent = title;
   e.append(t, body);
 }
+/* Switches the page between a normal search and a loaded own result, and describes the result. */
 function renderOwn() {
   $("lastStepNo").textContent = lastStep();
   if (ownResult)
@@ -1000,6 +1095,7 @@ function renderOwn() {
   updateCountryTag();
   suggestName();
 }
+/* Reads an own result (pasted text or file contents). Errors are shown under the field. */
 function loadOwn(raw, source) {
   const err = $("ownError");
   err.hidden = true;
@@ -1073,6 +1169,7 @@ const ownLabel = () => $("ownLabel").value.trim().slice(0, 80) || "My places";
    links) still work, but some web hosts check new visitors with a redirect that loses everything after "#",
    while the query part survives it. The API key is never included. Everything read from a link is checked
    before use, and unknown parameters (such as a host's own "i=1") are ignored. */
+/* The address of this search, with its settings. */
 function shareLink() {
   const q = new URLSearchParams(),
     s = scope();
@@ -1093,7 +1190,9 @@ function shareLink() {
   if (mn) q.set("name", mn);
   return location.href.split(/[?#]/)[0] + "?" + q.toString();
 }
+/* A link counts as a shared search if it has at least one of these. */
 const LINK_KEYS = ["k", "n", "s", "c", "d", "t"];
+/* The settings in this page's address, or null when it carries none. */
 function linkParams() {
   for (const part of [location.hash.slice(1), location.search.slice(1)]) {
     if (!part || !part.includes("=")) continue;
@@ -1107,6 +1206,8 @@ function linkParams() {
   }
   return null;
 }
+/* Puts the settings from the address into the form. Numbers are kept within the field limits, unknown
+   countries and broken tags are dropped. Returns true if the address carried a search. */
 function applyLink() {
   const q = linkParams();
   if (!q) return false;
@@ -1194,6 +1295,7 @@ window.addEventListener("hashchange", () => {
     linkNote();
   }
 });
+/* Tells the visitor that the settings come from a shared link and that nothing has run yet. */
 function linkNote() {
   const e = $("empty");
   e.textContent = "";
@@ -1210,6 +1312,8 @@ renderCountries();
 renderPicked();
 
 /* ---------- map ---------- */
+/* Leaflet map. `dots` holds the faint dots of all candidate places, `layer` the found locations.
+   Everything is drawn on one canvas, which stays fast with thousands of dots. */
 let map, layer, dots, canvas;
 function initMap() {
   if (!window.L || map) return;
@@ -1223,10 +1327,12 @@ function initMap() {
   layer = L.layerGroup().addTo(map);
 }
 window.addEventListener("load", initMap);
+/* Links for a place or location: Google Maps, OpenStreetMap, and Street View facing the place. */
 const gmaps = p =>
   `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(p.lat + "," + p.lng)}`;
 const osmLink = p =>
   `https://www.openstreetmap.org/${encodeURIComponent(p.type)}/${encodeURIComponent(p.id)}`;
+/* Faint dots for the places about to be checked (at most MAX_DOTS), and zooms the map to them. */
 function drawCandidates(places) {
   if (!map) return;
   for (const p of places.slice(0, MAX_DOTS))
@@ -1252,6 +1358,7 @@ function placePopup(p) {
     <a href="${gmaps(p)}" target="_blank" rel="noopener">Open in Google Maps</a>${near}
     <a href="${osmLink(p)}" target="_blank" rel="noopener">See the place on OpenStreetMap</a></div>`;
 }
+/* Records why a place was left out, and darkens its dot so it can be selected. */
 function markMissed(p, why, r, d) {
   p.miss = { why, panoId: r && r.panoId, heading: r && r.panoId ? bearing(r.lat, r.lng, p.lat, p.lng) : 0 };
   p.dot?.setStyle({ radius: 3.5, fillColor: "#8a5a66", fillOpacity: 0.8 });
@@ -1264,6 +1371,7 @@ const roadLine = loc =>
       : "";
 const svLink = loc =>
   `https://www.google.com/maps/@?api=1&map_action=pano&pano=${encodeURIComponent(loc.panoId)}&heading=${loc.heading.toFixed(0)}`;
+/* Draws a found location: marker at the camera, line to the place, dot at the place, and a popup. */
 function drawLocation(loc) {
   if (!map) return;
   const line = L.polyline(
@@ -1327,6 +1435,7 @@ function undoRemove() {
 const NAMES_MAX = 400; // rows drawn at once; the filter narrows the rest
 let namesOpenPano = "",
   namesSig = "";
+/* A new element with properties and children: makeElement("a", { href }, "text"). */
 const makeElement = (tag, props = {}, ...kids) => {
   const n = Object.assign(document.createElement(tag), props);
   n.append(...kids);
@@ -1341,6 +1450,8 @@ function showOnMap(loc) {
   map.setView(m.getLatLng(), Math.max(map.getZoom(), 16), { animate: false });
   m.openPopup();
 }
+/* The side list of named locations, sorted by name and filtered as typed. Only redrawn when something
+   it shows has changed (namesSig), as paint() calls it many times a second during a search. */
 function renderNames(force) {
   const named = results.filter(l => l.poi.name),
     unnamed = results.length - named.length;
@@ -1431,11 +1542,14 @@ class SearchError extends Error {
     this.detail = detail || "";
   }
 }
+/* Error pages from servers come as HTML; this keeps only the words. */
 const htmlToText = html =>
   String(html)
     .replace(/<[^>]*>/g, " ")
     .replace(/\s+/g, " ")
     .trim();
+/* The servers to try, in groups: the public servers starting at number `first`, and the own server
+   before or after them depending on its mode. */
 function serverGroups(first) {
   const pub = OVERPASS.map((_, n) => {
     const url = OVERPASS[(first + n) % OVERPASS.length];
@@ -1455,6 +1569,7 @@ async function overpassGroup(servers, query, signal, waitSeconds) {
     let gaveUp = false;
     const stop = () => ctl.abort();
     signal?.addEventListener("abort", stop);
+    // Give the server 20 seconds more than the query's own time limit before giving up on it.
     const timer = setTimeout(
       () => {
         gaveUp = true;
@@ -1646,7 +1761,9 @@ function buildQuery(filter, codes, grouped = true, pretty = false, seconds = WOR
     ");"
   );
 }
-/* Read Overpass elements into the place list. fallbackCc: country to use when the answer names none. */
+/* Reads Overpass elements into byId (a Map of Place by "node123", "way45", …). In a grouped answer each
+   country's places follow an element of type "area" naming the country. fallbackCc: country to use when
+   the answer names none. stats.noPosition counts elements without a position. */
 function mergeElements(els, byId, fallbackCc, stats) {
   if (!Array.isArray(els)) return;
   let cc = fallbackCc;
@@ -1815,6 +1932,7 @@ function makeParts(codes) {
   }
   return bins.sort((x, y) => x.top - y.top || x.w - y.w).map(b => b.codes);
 }
+/* Splits a part that was too big into two of about equal weight. */
 function halve(codes) {
   const a = [],
     b = [];
@@ -1831,6 +1949,7 @@ function halve(codes) {
   }
   return [a, b];
 }
+/* Waits ms milliseconds; stops early with an AbortError when the search is stopped. */
 const pause = (ms, signal) =>
   new Promise((resolve, reject) => {
     const t = setTimeout(done, ms);
@@ -1923,6 +2042,8 @@ async function fetchPlaces(filter, codes, signal, onProgress = () => {}) {
     done += weightOf(part);
     report();
   };
+  // OSM_PARALLEL workers take parts from the queue. A worker that finds the queue empty waits while the
+  // others still run, as a failed part may put two halves back.
   const worker = async () => {
     for (;;) {
       const part = queue.shift();
@@ -1953,7 +2074,10 @@ async function fetchPlaces(filter, codes, signal, onProgress = () => {}) {
 }
 
 /* ---------- Google Street View ---------- */
-// Preferred: the free metadata web service. If the browser cannot reach it, fall back to Google's script.
+// Two ways to ask Google: the Street View metadata web service (lookupRest), which is free of charge,
+// and Google's Maps JavaScript API (lookupScript). The web service is used whenever it works. The script
+// is needed when the browser cannot reach the web service, to search official coverage only, and to
+// read street names (roadInfo).
 let restWorked = false,
   jsService = null;
 /* Keep only well-formed values from a Street View answer. */
@@ -1977,6 +2101,7 @@ function cleanPano(r) {
     date: /^\d{4}(-\d{2})?$/.test(date) ? date : "",
   };
 }
+/* Nearest outdoor panorama within radius metres, from the metadata web service. @returns {Promise<PanoAnswer>} */
 async function lookupRest(p, radius, key, signal) {
   const u = `https://maps.googleapis.com/maps/api/streetview/metadata?location=${p.lat},${p.lng}&radius=${radius}&source=outdoor&key=${encodeURIComponent(key)}`;
   const r = await fetch(u, { signal });
@@ -1994,6 +2119,8 @@ async function lookupRest(p, radius, key, signal) {
 }
 let scriptPrimary = false,
   scriptBroken = false;
+/* Loads Google's Maps JavaScript API once and resolves to its StreetViewService. Fails ("denied" or
+   "unreachable") if the key is refused or nothing usable loads within 12 seconds. */
 function loadGoogleScript(key) {
   return (jsService ??= new Promise((resolve, reject) => {
     const giveUp = setTimeout(() => {
@@ -2041,6 +2168,9 @@ async function lookupScript(p, radius, key, sources = ["outdoor"]) {
     );
   });
 }
+/* Nearest panorama for a place. Uses the web service, and switches to Google's script for good if the
+   web service cannot be reached at all. A network error after it has worked once counts as a failed
+   lookup instead. @returns {Promise<PanoAnswer>} */
 async function lookup(p, radius, key, signal, officialOnly) {
   if (!scriptPrimary) {
     try {
@@ -2057,6 +2187,7 @@ async function lookup(p, radius, key, signal, officialOnly) {
    First choice: Google's script, which can search official coverage only. If the script cannot be used
    with this key, probe six points around the place with the ordinary lookup and keep the closest official answer. */
 let officialVia = "";
+/* The point a given distance and direction away (good enough for short distances; 111,320 m per degree). */
 function offsetPoint(p, metres, bearingDeg) {
   const t = toRadians(bearingDeg);
   return {
@@ -2078,6 +2209,8 @@ async function officialNearby(p, maxDist, key, signal) {
   }
   if (scriptPrimary) return { status: "ZERO_RESULTS" };
   officialVia = "ring";
+  // Six points around the place, a little over half the distance out, each searched with a radius that
+  // overlaps its neighbours, so that together they roughly cover the circle within maxDist.
   const answers = await Promise.all(
     [0, 60, 120, 180, 240, 300].map(b =>
       lookupRest(offsetPoint(p, maxDist * 0.55, b), Math.ceil(maxDist * 0.6), key, signal).catch(e => {
@@ -2117,8 +2250,9 @@ async function roadInfo(panoId, key) {
     });
   });
 }
-/* Why a lookup failed, in plain words. */
+/* Answers worth asking again, after a short wait. */
 const RETRY = new Set(["OVER_QUERY_LIMIT", "UNKNOWN_ERROR", "NETWORK"]);
+/* Why a lookup failed, in plain words: { key (for counting), short, text }. */
 function failReason(r) {
   switch (r.status) {
     case "OVER_QUERY_LIMIT":
@@ -2159,6 +2293,7 @@ function failReason(r) {
       };
   }
 }
+/* Official Google coverage says "© 2024 Google" (or "Google LLC"); photos from others name the uploader. */
 const isOfficial = c =>
   c
     .replace(/[©\d\s]/g, "")
@@ -2182,6 +2317,9 @@ function renderAgain() {
     $("againHint").textContent =
       `Uses the ${fmt(lastFetch.places.length)} ${lastFetch.places.length === 1 ? "place" : "places"} already found for "${lastFetch.label}" (${lastFetch.where}) with the settings in step 3. OpenStreetMap is not asked again.`;
 }
+/* Counters for one search, shown under the map: places found, checked, left out (none, far, close,
+   unofficial, dup = shares a panorama with another place), failed lookups and why, places rescued by
+   the second official-only look, road name results, countries skipped, and progress from 0 to 1. */
 const emptyStats = () => ({
   places: 0,
   checked: 0,
@@ -2199,6 +2337,7 @@ const emptyStats = () => ({
 });
 let searchStats = emptyStats();
 
+/* Shows a message next to the button. type: "note" or "error"; empty text hides it. */
 function show(type, text) {
   const m = $("message");
   m.hidden = !text;
@@ -2231,6 +2370,7 @@ $("failClose").onclick = () => {
 $("failRetry").onclick = () => {
   if (!running) startSearch(null);
 };
+/* Updates the counters, progress bar and buttons from searchStats and results. now: new status line. */
 function paint(now) {
   if (now) $("now").textContent = now;
   $("count").textContent = fmt(results.length);
@@ -2308,7 +2448,9 @@ $("form").onsubmit = ev => {
 $("again").onclick = () => {
   if (!running && lastFetch && !ownResult) startSearch(lastFetch);
 };
-/* reuse: the kept result of an earlier OpenStreetMap search, to check Street View on it again. */
+/* Runs a search: checks the settings, gets the places (from OpenStreetMap, the user's own result, or
+   `reuse`), then checks Street View for each until "Locations wanted" is reached or all are checked.
+   reuse: the kept result of an earlier OpenStreetMap search (lastFetch), to check Street View on it again. */
 async function startSearch(reuse) {
   if (running) return;
   show("", "");
@@ -2490,6 +2632,7 @@ async function startSearch(reuse) {
           tries = 0;
         for (;;) {
           r = await lookup(p, Math.ceil(maxDist), key, signal, official);
+          // up to three more tries, waiting 1.5, 3 and 4.5 seconds
           if (RETRY.has(r.status) && tries++ < 3) {
             await sleep(1500 * tries);
             continue;
@@ -2571,6 +2714,7 @@ async function startSearch(reuse) {
           markMissed(p, `The Street View lookup failed${n > 1 ? ` after ${n} tries` : ""}. ${why.text}`);
         }
         searchStats.progress = Math.max(results.length / target, searchStats.checked / places.length);
+        // redraw at most about seven times a second; drawing after every lookup would slow the page down
         if (performance.now() - lastPaint > 150) {
           lastPaint = performance.now();
           paint();
@@ -2661,6 +2805,8 @@ async function startSearch(reuse) {
 }
 
 /* ---------- export ---------- */
+/* The results in map-making.app's format: { name, customCoordinates: [{ lat, lng, heading, pitch, zoom,
+   panoId, countryCode?, extra: { tags } }] }. */
 function exportJson() {
   return JSON.stringify({
     name: lastName,
@@ -2706,6 +2852,7 @@ if (fromLink) linkNote();
 
 /* ---------- welcome, shown once per browser ---------- */
 let welcomeBack = null;
+/* The dialog remembers what had the focus and gives it back when closed. */
 function openWelcome() {
   welcomeBack = document.activeElement;
   $("welcome").hidden = false;
