@@ -47,6 +47,8 @@ h1{font-size:2.5rem;line-height:1;font-weight:800;margin:0 0 10px;letter-spacing
 .lede{margin:0 0 26px;color:var(--muted);max-width:34ch}
 fieldset{border:0;padding:0;margin:0;min-width:0;transition:opacity .2s}
 fieldset:disabled{opacity:.5}
+.framed{position:fixed;inset:0;z-index:5000;background:var(--paper);display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:24px}
+.framed p{margin:0 0 10px;font-size:1.1rem}
 .howbtn{font:inherit;border:0;background:none;color:var(--blue-dark);text-decoration:underline;cursor:pointer;padding:0;white-space:nowrap}
 .welcome{position:fixed;inset:0;z-index:3000;background:rgba(20,33,61,.6);display:flex;align-items:center;justify-content:center;padding:16px}
 .welcome-box{position:relative;background:#fff;border-radius:16px;max-width:580px;width:100%;max-height:calc(100vh - 32px);overflow:auto;
@@ -270,6 +272,10 @@ a{color:var(--blue-dark)}
 </style>
 </head>
 <body>
+<div class="framed" id="framed" hidden>
+  <p><b>Lookout cannot be used inside another page.</b></p>
+  <p><a id="framedLink" href="./" target="_top" rel="noopener">Open Lookout on its own</a></p>
+</div>
 <div class="welcome" id="welcome" hidden>
   <div class="welcome-box" id="welcomeBox" role="dialog" aria-modal="true" aria-labelledby="welcomeTitle" tabindex="-1">
     <button type="button" class="welcome-x" id="welcomeX" aria-label="Close">×</button>
@@ -511,6 +517,15 @@ a{color:var(--blue-dark)}
 /* Place catalogue: names and search words from the OpenStreetMap iD editor presets
    (id-tagging-schema, ISC licence), in English, German, French, Spanish and Portuguese. */
 const CAT = /*CATALOG*/;
+/* Inside another site's frame, show only a link to open the app on its own, so nobody can lay a fake
+   page over it and trick clicks (the security policy in the page itself cannot forbid framing). */
+let FRAMED = false;
+try { FRAMED = window.top !== window.self; } catch { FRAMED = true; }
+if (FRAMED) {
+  document.querySelector(".app").hidden = true;
+  document.getElementById("framed").hidden = false;
+  document.getElementById("framedLink").href = location.href.split("#")[0];
+}
 </script>
 <script>
 "use strict";
@@ -635,9 +650,10 @@ const hostOf = u => { try { return new URL(u).host; } catch { return "the server
 
 /* ---------- catalogue search ---------- */
 let lang = store.get("lang", null) || (navigator.language || "en").slice(0, 2).toLowerCase();
-if (!LANGS[lang]) lang = "en";
+if (typeof lang !== "string" || !Object.hasOwn(LANGS, lang)) lang = "en";   // stored value: only the five known languages
 const indexCache = {};
 function index(l) {
+  if (!Object.hasOwn(LANGS, l)) l = "en";
   return indexCache[l] ??= CAT[l].map((s, i) => {
     const parts = (s || CAT.en[i]).split("\t");
     return { name: parts[0], n: norm(parts[0]), terms: parts.slice(1).map(norm) };
@@ -907,7 +923,7 @@ if (kind && kind.tag) { try { parseTags(kind.tag); kind.label = catName(kind.tag
 const srvStore = {
   load() {
     for (const st of [() => localStorage, () => sessionStorage]) {
-      try { const v = JSON.parse(st().getItem("lookout2.osmOwn") || "null"); if (v && cleanServer(v.url) && ["first", "fallback"].includes(v.mode)) return { url: v.url, mode: v.mode, remembered: st() === localStorage }; } catch {}
+      try { const v = JSON.parse(st().getItem("lookout2.osmOwn") || "null"); if (v && cleanServer(v.url) && ["first", "fallback"].includes(v.mode)) return { url: cleanServer(v.url), mode: v.mode, remembered: st() === localStorage }; } catch {}
     }
     return null;
   },
@@ -1910,7 +1926,7 @@ document.addEventListener("keydown", e => {
   }
 });
 $("welcomeN").textContent = $("welcomeN2").textContent = COVERAGE.size;
-if (!store.get("welcomed", false)) openWelcome();
+if (!store.get("welcomed", false) && !FRAMED) openWelcome();
 </script>
 </body>
 </html>

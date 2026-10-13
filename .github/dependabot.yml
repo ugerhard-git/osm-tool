@@ -1,0 +1,12 @@
+# Proposes updates for the build packages and the GitHub Actions used here, once a month.
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: monthly
+    open-pull-requests-limit: 5
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly

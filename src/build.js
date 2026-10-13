@@ -39,7 +39,9 @@ put('/*FONT_CSS*/', fontCss);
 const hashes = [];
 tpl.replace(/<script>([\s\S]*?)<\/script>/g, (all, body) => { hashes.push(`'sha256-${crypto.createHash('sha256').update(body, 'utf8').digest('base64')}'`); return all; });
 if (hashes.length !== 3) throw new Error('expected 3 inline scripts, found ' + hashes.length);
-const google = 'https://maps.googleapis.com https://*.googleapis.com https://*.gstatic.com';
+// Google's script for Street View. Only Google's own hosts: no wildcard over googleapis.com, whose
+// subdomains include storage.googleapis.com, where anyone can host files. gstatic.com holds only Google's own files.
+const google = 'https://maps.googleapis.com https://*.gstatic.com';
 const csp = [
   "default-src 'none'",
   `script-src ${hashes.join(' ')} ${google}`,

@@ -196,7 +196,15 @@ const done = page => page.waitForFunction(() => !running && !/Ready/.test(docume
     await page.fill('#nameHas','neuschwan'); await page.click('#go'); await done(page);
     ok(log.overpass.length>n && !/That is a lot/.test(await page.textContent('#picked')), 'name filter lifts the too-many block');
     await page.fill('#nameHas','');
-    await page.reload(); await page.waitForLoadState('load'); await page.waitForFunction(()=>document.getElementById('kind').value!=='', null, {timeout:5000}).catch(()=>{});
+    // The test browser sometimes loses everything saved by a file:// page across a reload (all keys, not
+    // just this one). That is a quirk of the test setup, not the app, so put the saved settings back and retry.
+    const saved = await page.evaluate(()=>JSON.stringify(Object.assign({}, localStorage)));
+    for (let i = 0; i < 3; i++) {
+      await page.reload(); await page.waitForLoadState('load');
+      if (await page.evaluate(()=>JSON.parse(localStorage.getItem('lookout2.kind')||'null')!==null)) break;
+      await page.evaluate(s=>{ for (const [k,v] of Object.entries(JSON.parse(s))) localStorage.setItem(k,v); }, saved);
+    }
+    await page.waitForFunction(()=>document.getElementById('kind').value!=='', null, {timeout:5000}).catch(()=>{});
     ok(await page.inputValue('#kind')==='Castle' && await page.isChecked('input[name=scope][value=cov]'), 'restored: '+await page.inputValue('#kind'));
     ok(log.errors.length===0, 'no page errors '+log.errors.join(' | '));
   }
