@@ -80,6 +80,8 @@ const page = path.resolve(__dirname, "../dist/index.nokey.html");
   // tampered stored values do not break the page
   await p.evaluate(() => {
     localStorage.setItem("lookout2.lang", JSON.stringify("__proto__"));
+    localStorage.setItem("lookout2.tagKind", "true");
+    localStorage.setItem("lookout2.tagName", "true");
     localStorage.setItem(
       "lookout2.osmOwn",
       JSON.stringify({ url: "https://example.org/k/interpreter#frag", mode: "first" }),
@@ -99,6 +101,7 @@ const page = path.resolve(__dirname, "../dist/index.nokey.html");
     x: window.__x,
     img: document.querySelectorAll('img[src="x"]').length,
     q: document.getElementById("queryText").value,
+    old: ["tagKind", "tagName"].filter(k => localStorage.getItem("lookout2." + k) !== null).join(),
   }));
   console.log("  ", JSON.stringify(t).slice(0, 220));
   ok(
@@ -109,6 +112,7 @@ const page = path.resolve(__dirname, "../dist/index.nokey.html");
       t.img === 0,
     "tampered language, server, countries and kind are cleaned or refused",
   );
+  ok(t.old === "", "settings of the removed tag options are cleared: " + t.old);
   await p.fill("#kind", "light");
   await p.waitForTimeout(200);
   ok((await p.$$("#suggest li")).length > 0, "suggestions still work after a bad stored language");

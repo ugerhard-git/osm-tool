@@ -63,7 +63,6 @@ const file = PAGE;
     m: document.getElementById("minDist").value,
     t: document.getElementById("target").value,
     o: document.getElementById("official").checked,
-    g: document.getElementById("tags").checked,
     gc: document.getElementById("tagCountry").checked,
     name: document.getElementById("mapName").value,
     key: document.getElementById("apiKey").value,
@@ -80,7 +79,6 @@ const file = PAGE;
       st.m === "10" &&
       st.t === "42" &&
       st.o === false &&
-      st.g === false &&
       st.gc === true &&
       st.name === "My castles" &&
       st.key === "",

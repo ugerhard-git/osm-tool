@@ -9,7 +9,7 @@ It runs entirely in the browser as a single HTML page. There is no server of its
 1. **Find the places.** The kind of place (an OpenStreetMap tag such as `man_made=lighthouse`, chosen through a searchable catalogue in English, German, French, Spanish and Portuguese) and optional name words are turned into an [Overpass API](https://wiki.openstreetmap.org/wiki/Overpass_API) query. Country searches are sent in parts, a few countries at a time; parts that time out are split and retried.
 2. **Check Street View.** For each place, Google's free Street View metadata service is asked for the nearest panorama within the chosen distance. If the nearest one is a user photo, a second, official-only look is made.
 3. **Face the place.** Each accepted location gets a heading from the panorama towards the place.
-4. **Export.** The result downloads as a map-making.app JSON file, optionally tagged with country, kind of place, place name and whether a road name is shown.
+4. **Export.** The result downloads as a map-making.app JSON file, optionally tagged with the country and with whether a road name is shown.
 
 More features: a shareable link for each search, uploading your own Overpass Turbo result, using your own (paid) Overpass server, a list of found locations by name, and removing locations before export.
 

@@ -115,7 +115,6 @@ const els = [
   const n2 = osm,
     s2 = sv;
   await p.fill("#maxDist", "60");
-  await p.check("#tags");
   await p.click("#again");
   await done();
   ok(
@@ -125,7 +124,7 @@ const els = [
   let j = JSON.parse(await p.evaluate(() => exportJson()));
   ok(
     j.name === "Lighthouse (Malta)" &&
-      j.customCoordinates.every(c => c.countryCode === "MT" && c.extra.tags.join() === "Lighthouse,Malta"),
+      j.customCoordinates.every(c => c.countryCode === "MT" && c.extra.tags.join() === "Malta"),
     "map name, country codes and tags as in the original search",
   );
   await p.fill("#maxDist", "150");
@@ -150,7 +149,7 @@ const els = [
     osm === n2 &&
       j.customCoordinates.length === 3 &&
       j.name === "My own name" &&
-      j.customCoordinates[0].extra.tags[0] === "Lighthouse" &&
+      j.customCoordinates[0].extra.tags.join() === "Malta" &&
       /for "Lighthouse"/.test(await p.textContent("#againHint")),
     "recheck keeps the earlier places even after step 1 changed",
   );

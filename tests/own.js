@@ -166,7 +166,6 @@ fs.writeFileSync(path.join(__dirname, "../dist/loose-export.json"), JSON.stringi
     "summary, label from file name, country tag available",
   );
   await p.fill("#ownLabel", "Castles");
-  await p.check("#tags");
   await p.screenshot({ path: require("path").join(__dirname, "../dist/screens/l2.png") });
   await p.click("#go");
   await p.waitForFunction(() => !running && /Done/.test(document.getElementById("now").textContent));
@@ -180,8 +179,8 @@ fs.writeFileSync(path.join(__dirname, "../dist/loose-export.json"), JSON.stringi
         .map(c => c.countryCode)
         .sort()
         .join() === "IT,MT,MT" &&
-      j.customCoordinates.some(c => c.extra.tags.join() === "Castles,Italy"),
-    "results carry label, country codes and tags",
+      j.customCoordinates.some(c => c.extra.tags.join() === "Italy"),
+    "results carry label, country codes and country tags",
   );
   await p.evaluate(() => {
     layer.eachLayer(l => {
@@ -242,8 +241,8 @@ fs.writeFileSync(path.join(__dirname, "../dist/loose-export.json"), JSON.stringi
   const j2 = JSON.parse(await p.evaluate(() => exportJson()));
   ok(
     j2.customCoordinates.length === 6 &&
-      j2.customCoordinates.every(c => !("countryCode" in c) && c.extra.tags.join() === "Castles"),
-    "loose result runs; no country code or country tag",
+      j2.customCoordinates.every(c => !("countryCode" in c) && !("extra" in c)),
+    "loose result runs; no country code and no tags",
   );
   // pasted text, then back to normal
   await p.fill("#ownText", JSON.stringify(grouped));
