@@ -3,8 +3,17 @@ const pkg = name => path.dirname(require.resolve(name + '/package.json'));
 const out = path.join(__dirname, '../dist');
 fs.mkdirSync(out, { recursive: true });
 const cat = require('./catalog.js');
-let tpl = fs.readFileSync(path.join(__dirname, 'template.html'), 'utf8');
+let tpl = fs.readFileSync(path.join(__dirname, 'page.html'), 'utf8');
 const put = (mark, text) => { if (!tpl.includes(mark)) throw new Error('placeholder missing: ' + mark); tpl = tpl.replace(mark, () => text); };
+
+// The page is published as one file: the app's styles and code are written into it.
+const src = name => fs.readFileSync(path.join(__dirname, name), 'utf8').replace(/\n$/, '');
+const appCss = src('style.css'), appJs = src('app.js');
+if (/<\/style/i.test(appCss)) throw new Error('style.css contains a closing style tag');
+if (/<\/script/i.test(appJs)) throw new Error('app.js contains a closing script tag');
+if (/\/\*(CATALOG|LEAFLET_JS|LEAFLET_CSS|FONT_CSS|CSP)\*\//.test(appCss + appJs)) throw new Error('a build placeholder appears in style.css or app.js');
+put('/*APP_CSS*/', appCss);
+put('/*APP_JS*/', appJs);
 
 // Catalogue data
 put('/*CATALOG*/', JSON.stringify(cat).replace(/</g, '\\u003c').replace(/[\u2028\u2029]/g, ''));
