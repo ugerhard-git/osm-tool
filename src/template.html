@@ -1,0 +1,1916 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lookout: Street View maps that face a kind of place</title>
+<meta http-equiv="Content-Security-Policy" content="/*CSP*/">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<!-- ------------------------------------------------------------------
+  SITE OWNER SETTINGS. Edit only the values between the quotes.
+
+  googleApiKey         Your Google API key. Leave it empty in the repository: the build
+                       fills it in from the GOOGLE_API_KEY environment variable.
+                       It needs the "Street View Static
+                       API" enabled. In the Google Cloud console, restrict it
+                       to this site's address and to that API, and set a daily
+                       quota. If left empty, visitors are asked for their own key.
+  streetViewCountries  Two-letter codes of the countries searched by default.
+
+  Do not edit the script blocks further down: the page only runs scripts
+  whose fingerprint matches the security policy above.
+------------------------------------------------------------------- -->
+<script type="application/json" id="lookout-config">
+{
+  "googleApiKey": "",
+  "streetViewCountries": "AD AE AL AR AS AT AU AX BA BD BE BG BM BO BR BT BW CA CC CH CL CO CR CW CX CY CZ DE DK DO EC EE ES FI FO FR GB GE GH GI GL GR GT GU HK HR HU ID IE IL IM IN IS IT JE JO JP KE KG KH KR KZ LA LI LK LS LT LU LV MC ME MK MN MO MP MT MX MY NA NG NL NO NP NZ OM PA PE PH PL PR PS PT PY QA RE RO RS RU RW SE SG SI SK SM SN ST SZ TH TN TR TW UA UG US UY VI VN XK ZA"
+}
+</script>
+<style>
+/*FONT_CSS*/
+/*LEAFLET_CSS*/
+</style>
+<style>
+:root{
+  --ink:#14213d; --muted:#586583; --paper:#eef1f6; --panel:#ffffff;
+  --line:#d3dae6; --blue:#1d5fd1; --blue-dark:#164aa6; --amber:#f2a900;
+  --amber-soft:#fff4d6; --red:#b3261e; --red-soft:#fdecea;
+}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{margin:0;font-family:"Overpass",system-ui,-apple-system,"Segoe UI",sans-serif;
+  color:var(--ink);background:var(--paper);font-size:16px;line-height:1.45}
+.app{display:grid;grid-template-columns:minmax(340px,420px) 1fr;height:100vh}
+.panel{background:var(--panel);border-right:1px solid var(--line);overflow-y:auto;padding:28px 28px 40px}
+.stage{position:relative;min-height:0;display:flex;flex-direction:column}
+h1{font-size:2.5rem;line-height:1;font-weight:800;margin:0 0 10px;letter-spacing:-.02em}
+.lede{margin:0 0 26px;color:var(--muted);max-width:34ch}
+fieldset{border:0;padding:0;margin:0;min-width:0;transition:opacity .2s}
+fieldset:disabled{opacity:.5}
+.howbtn{font:inherit;border:0;background:none;color:var(--blue-dark);text-decoration:underline;cursor:pointer;padding:0;white-space:nowrap}
+.welcome{position:fixed;inset:0;z-index:3000;background:rgba(20,33,61,.6);display:flex;align-items:center;justify-content:center;padding:16px}
+.welcome-box{position:relative;background:#fff;border-radius:16px;max-width:580px;width:100%;max-height:calc(100vh - 32px);overflow:auto;
+  padding:28px 30px 26px;box-shadow:0 20px 60px rgba(0,0,0,.35)}
+.welcome-box:focus{outline:none}
+.welcome-box h2{font-size:1.7rem;font-weight:800;line-height:1.1;margin:0 34px 12px 0;letter-spacing:-.01em}
+.welcome-box p{margin:0 0 12px}
+.welcome-box ol{margin:0 0 16px;padding-left:1.3em}
+.welcome-box li{margin-bottom:6px}
+.welcome-warn{background:var(--amber-soft);border:1.5px solid #f0d58a;border-radius:10px;padding:12px 14px;margin:0 0 12px}
+.welcome-warn + .btn{margin-top:6px}
+.welcome-warn b{display:block;margin-bottom:2px}
+.welcome-x{position:absolute;top:14px;right:14px;width:36px;height:36px;border-radius:50%;border:0;background:var(--paper);color:var(--ink);
+  font:inherit;font-size:1.5rem;line-height:1;cursor:pointer}
+.welcome-x:hover{background:var(--line)}
+.welcome-box .btn{padding:11px 26px;font-size:1.05rem}
+.step{border-top:2px solid var(--ink);padding:16px 0 22px}
+.step h2{font-size:1.15rem;font-weight:800;margin:0 0 12px;display:flex;gap:10px;align-items:baseline}
+.step h2 .n{display:inline-grid;place-items:center;width:1.5em;height:1.5em;border-radius:50%;
+  background:var(--ink);color:#fff;font-size:.8rem;flex:none;transform:translateY(-1px)}
+label{display:block;font-weight:600;margin:0 0 6px}
+.labelrow{display:flex;justify-content:space-between;align-items:baseline;gap:10px}
+.labelrow.tight{justify-content:flex-start;gap:8px}
+.info{font:inherit;font-size:.8rem;font-weight:800;line-height:1;width:20px;height:20px;border-radius:50%;border:1.5px solid var(--blue-dark);
+  background:#fff;color:var(--blue-dark);cursor:pointer;padding:0;flex:none;transform:translateY(-2px)}
+.info[aria-expanded=true]{background:var(--blue-dark);color:#fff}
+.infobox{margin-top:10px;padding:12px 14px;border-radius:8px;background:var(--paper);font-size:.92rem}
+.infobox p{margin:0 0 6px}
+.infobox ul{margin:0;padding-left:1.2em}
+.infobox li{margin-top:4px}
+.labelrow select{width:auto;padding:3px 6px;font-size:.88rem;border-radius:6px}
+.opt{font-weight:400;color:var(--muted);font-size:.88rem;margin-left:4px}
+.hint{color:var(--muted);font-size:.9rem;margin:6px 0 0}
+select,input[type=text],input[type=number],input[type=search],input[type=password]{
+  width:100%;font:inherit;color:inherit;padding:10px 12px;border:1.5px solid var(--line);
+  border-radius:8px;background:#fff}
+select:focus-visible,input:focus-visible,button:focus-visible,summary:focus-visible,a:focus-visible{
+  outline:3px solid var(--amber);outline-offset:2px}
+.row{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.field{margin-top:14px}
+.unit{position:relative}
+.unit input{padding-right:3.2em}
+.unit span{position:absolute;right:12px;top:50%;transform:translateY(-50%);color:var(--muted);pointer-events:none}
+.check{display:flex;gap:10px;align-items:flex-start;font-weight:400;margin-top:14px;cursor:pointer}
+.check.off{cursor:default}
+.check.off > span{color:var(--muted)}
+.check input{width:18px;height:18px;margin:3px 0 0;accent-color:var(--blue);flex:none}
+
+/* kind picker */
+.combo{position:relative}
+.suggest{position:absolute;z-index:1200;left:0;right:0;top:calc(100% + 4px);margin:0;padding:4px 0;list-style:none;
+  background:#fff;border:1.5px solid var(--ink);border-radius:8px;max-height:340px;overflow-y:auto;
+  box-shadow:0 10px 24px rgba(20,33,61,.18)}
+.suggest li{padding:7px 12px;cursor:pointer;display:flex;justify-content:space-between;gap:10px;align-items:baseline}
+.suggest li[aria-selected=true]{background:var(--amber-soft)}
+.suggest li .nm{font-weight:600}
+.suggest li .tg{display:block;font-weight:400;color:var(--muted);font-size:.82rem;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;word-break:break-all}
+.suggest li .ct{color:var(--muted);font-size:.82rem;white-space:nowrap}
+.suggest .grp{padding:8px 12px 3px;font-size:.82rem;color:var(--muted);cursor:default;border-top:1px solid var(--line);margin-top:4px}
+.suggest .grp:first-child{border-top:0;margin-top:0}
+.picked{margin-top:10px;padding:10px 12px;border-radius:8px;background:var(--paper);font-size:.92rem}
+.picked code{background:#fff}
+.picked .warn{color:var(--red);display:block;margin-top:4px}
+.examples button{font:inherit;font-size:.88rem;border:1.5px solid var(--line);background:#fff;border-radius:999px;padding:4px 11px 3px;cursor:pointer}
+.examples button:hover{border-color:var(--blue)}
+
+/* scope + countries */
+.radio{display:flex;gap:10px;align-items:flex-start;font-weight:400;margin:0 0 8px;cursor:pointer}
+.radio input{width:18px;height:18px;margin:3px 0 0;accent-color:var(--blue);flex:none}
+.radio b{font-weight:600}
+#pickBox{margin:4px 0 0 28px}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 8px}
+.chip{font:inherit;font-size:.9rem;border:0;border-radius:999px;padding:4px 10px 3px;background:var(--ink);color:#fff;cursor:pointer}
+.chip.off{background:#7b859c}
+.chip::after{content:"×";margin-left:6px;opacity:.7}
+.countries{border:1.5px solid var(--line);border-radius:8px;max-height:190px;overflow-y:auto;margin-top:8px;padding:4px 0}
+.countries label{display:flex;gap:10px;align-items:center;font-weight:400;margin:0;padding:5px 12px;cursor:pointer}
+.countries label:hover{background:var(--paper)}
+.countries input{accent-color:var(--blue);width:16px;height:16px}
+.countries .none{padding:8px 12px;color:var(--muted)}
+.countries .grp{padding:8px 12px 4px;font-size:.82rem;color:var(--muted);position:sticky;top:-4px;background:#fff;border-bottom:1px solid var(--line)}
+
+details.help{margin-top:14px;border:1.5px solid var(--line);border-radius:8px;background:#fafbfd}
+details.help summary{cursor:pointer;font-weight:600;padding:11px 14px;color:var(--blue-dark)}
+details.help .body{padding:0 14px 14px;font-size:.95rem}
+details.help h3{font-size:1rem;margin:14px 0 4px}
+details.help p{margin:0 0 8px}
+code{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:.88em;background:#e7ecf4;padding:1px 5px;border-radius:4px}
+#queryText{width:100%;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:.8rem;line-height:1.4;
+  border:1.5px solid var(--line);border-radius:8px;padding:8px 10px;resize:vertical;background:#fff;color:var(--ink);white-space:pre;overflow:auto}
+.qrow{display:flex;gap:14px;align-items:center;flex-wrap:wrap;margin-top:8px}
+.qrow .btn{padding:7px 12px}
+#srvUrl{margin-bottom:10px}
+details.help code{overflow-wrap:anywhere}
+.radio.srv{margin:0 0 6px}
+.drop{display:flex;gap:12px;align-items:center;flex-wrap:wrap;border:2px dashed var(--line);border-radius:8px;padding:12px;margin:10px 0}
+.drop.over{border-color:var(--blue);background:#eef4ff}
+.drop .btn{padding:7px 12px;margin:0}
+.drop:focus-within .btn{outline:3px solid var(--amber);outline-offset:2px}
+.visually-hidden{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+#ownText{width:100%;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:.8rem;border:1.5px solid var(--line);border-radius:8px;padding:8px 10px;resize:vertical}
+#ownStep .btn{margin-top:14px;font-size:.92rem;padding:8px 12px}
+table.syntax{border-collapse:collapse;width:100%;margin:4px 0 8px}
+table.syntax tr{display:block;border-top:1px solid var(--line);padding:7px 0}
+table.syntax td{display:block;padding:0}
+table.syntax td:first-child{margin-bottom:2px}
+a{color:var(--blue-dark)}
+.go{width:100%;font:inherit;font-weight:800;font-size:1.1rem;border:0;border-radius:10px;padding:15px;
+  background:var(--blue);color:#fff;cursor:pointer;margin-top:4px;display:flex;justify-content:center;align-items:center;gap:10px}
+.go:hover{background:var(--blue-dark)}
+.go.stop{background:var(--ink)}
+.sharebtn{display:block;margin:12px auto 0;font:inherit;font-weight:600;font-size:.95rem;border:0;background:none;color:var(--blue-dark);
+  text-decoration:underline;cursor:pointer;padding:4px 6px}
+.again{margin-top:12px}
+.again .btn{width:100%;padding:11px 14px}
+.again .hint{margin:6px 0 0;text-align:center}
+.fail-acts{display:flex;gap:10px;flex-wrap:wrap}
+.msg{margin-top:14px;padding:12px 14px;border-radius:8px;font-size:.95rem}
+.msg.error{background:var(--red-soft);color:var(--red);border:1.5px solid #f3c4bf}
+.msg.note{background:var(--amber-soft);border:1.5px solid #f0d58a}
+.msg button{font:inherit;font-weight:600;margin-top:8px;display:block;border:1.5px solid var(--ink);background:#fff;border-radius:8px;padding:6px 10px;cursor:pointer}
+.foot{margin-top:26px;font-size:.85rem;color:var(--muted)}
+
+.mapwrap{flex:1;min-height:300px;position:relative}
+#map{position:absolute;inset:0;background:#dfe5ee}
+.names{position:absolute;z-index:1100;top:0;right:0;bottom:0;width:min(350px,100%);background:#fff;border-left:1px solid var(--line);
+  box-shadow:-8px 0 24px rgba(20,33,61,.15);display:flex;flex-direction:column;padding:14px 14px 10px}
+.names-head{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:10px}
+.names-head .btn{padding:5px 10px;font-size:.88rem}
+.names ul{list-style:none;margin:10px -14px 0;padding:0;overflow-y:auto;flex:1;border-top:1px solid var(--line)}
+.names li{border-bottom:1px solid var(--line)}
+.names .row{display:flex;justify-content:space-between;gap:10px;align-items:baseline;width:100%;text-align:left;font:inherit;border:0;background:none;
+  padding:9px 14px;cursor:pointer;color:var(--ink)}
+.names .row:hover{background:var(--paper)}
+.names .row[aria-expanded=true]{background:var(--amber-soft);font-weight:600}
+.names .row small{color:var(--muted);font-weight:400;white-space:nowrap}
+.names .detail{padding:2px 14px 14px;background:var(--amber-soft);font-size:.92rem}
+.names .detail a{display:block;margin-top:5px}
+.names .detail .svbtn{margin:8px 0;padding:10px 14px;border-radius:8px;background:var(--blue);color:#fff;font-size:1rem;font-weight:800;text-align:center;text-decoration:none}
+.names .detail .svbtn:hover{background:var(--blue-dark)}
+.names .detail .acts{display:flex;justify-content:space-between;align-items:center;margin-top:10px}
+.names .detail .acts .btn{padding:6px 10px;font-size:.88rem}
+.names .detail .rm{font:inherit;font-size:.78rem;border:0;background:none;color:var(--red);text-decoration:underline;padding:0;cursor:pointer}
+.names #namesNote{margin:8px 0 0}
+.stage.listing .live.corner{right:364px}
+.empty{position:absolute;inset:0 0 auto 0;top:38%;text-align:center;color:var(--muted);pointer-events:none;z-index:500;padding:0 24px}
+.empty strong{display:block;color:var(--ink);font-size:1.3rem;margin-bottom:4px}
+
+/* live status card on the map */
+.failcard{position:absolute;z-index:1200;left:50%;top:40%;transform:translate(-50%,-50%);width:min(480px,calc(100% - 32px));
+  max-height:calc(100% - 120px);overflow:auto;background:#fff;border:2px solid var(--red);border-top-width:8px;border-radius:14px;
+  padding:20px 24px;box-shadow:0 14px 40px rgba(20,33,61,.3)}
+.fail-title{font-weight:800;font-size:1.25rem;line-height:1.25;color:var(--red)}
+.failcard p{margin:8px 0 12px}
+.failcard details{margin:0 0 14px;font-size:.9rem}
+.failcard summary{cursor:pointer;color:var(--blue-dark);font-weight:600}
+.failcard pre{margin:8px 0 0;padding:10px;background:var(--paper);border-radius:8px;white-space:pre-wrap;word-break:break-word;
+  font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:.8rem;max-height:160px;overflow:auto}
+.msg b{display:block}
+.live{position:absolute;z-index:1000;left:50%;top:38%;transform:translate(-50%,-50%);width:min(430px,calc(100% - 32px));
+  background:var(--ink);color:#fff;border-radius:14px;padding:22px 24px;display:flex;gap:18px;align-items:flex-start;
+  box-shadow:0 14px 40px rgba(20,33,61,.35)}
+.live-title{font-weight:800;font-size:1.2rem;line-height:1.25}
+.live-sub{opacity:.8;font-size:.95rem;margin-top:4px}
+.stages{list-style:none;margin:14px 0 0;padding:0;font-size:.95rem}
+.stages li{display:flex;gap:10px;align-items:center;padding:3px 0;opacity:.5}
+.stages li::before{content:"";width:10px;height:10px;border-radius:50%;border:2px solid #fff;flex:none}
+.stages li.on{opacity:1;font-weight:600}
+.stages li.on::before{background:var(--amber);border-color:var(--amber)}
+.stages li.done{opacity:.75}
+.stages li.done::before{background:#fff}
+.live.corner{left:auto;right:14px;top:14px;transform:none;width:auto;max-width:calc(100% - 80px);padding:12px 16px;gap:12px;align-items:center}
+.live.corner .stages{display:none}
+.live.corner .live-title{font-size:1rem}
+.live.corner .live-sub{font-size:.88rem;margin-top:1px}
+.spin{width:34px;height:34px;border-radius:50%;border:4px solid rgba(255,255,255,.25);border-top-color:var(--amber);
+  animation:spin .9s linear infinite;flex:none}
+.live.corner .spin{width:22px;height:22px;border-width:3px}
+.go .spin{width:18px;height:18px;border-width:3px}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+.bar{background:var(--panel);border-top:1px solid var(--line);padding:14px 22px;display:flex;gap:22px;align-items:center;flex-wrap:wrap}
+.status{flex:1;min-width:240px}
+.status .now{font-weight:600}
+.track{height:8px;background:var(--paper);border-radius:4px;margin:8px 0;overflow:hidden;position:relative}
+.track i{display:block;height:100%;width:0;background:var(--amber);transition:width .2s;border-radius:4px}
+.track.osm i{background:var(--blue)}
+.track.busy i{width:30%!important;position:absolute;animation:slide 1.3s ease-in-out infinite}
+@keyframes slide{from{left:-30%}to{left:100%}}
+.tally{display:flex;gap:16px;flex-wrap:wrap;font-size:.9rem;color:var(--muted)}
+.tally b{color:var(--ink)}
+.tally .key{flex-basis:100%}
+.tally .key i{display:inline-block;width:9px;height:9px;border-radius:50%;background:#8a5a66;margin-right:6px}
+.out{display:flex;gap:10px;align-items:center}
+.count{font-size:2rem;font-weight:800;line-height:1;margin-right:6px}
+.count small{display:block;font-size:.8rem;font-weight:400;color:var(--muted);margin-top:3px}
+.btn{font:inherit;font-weight:600;border-radius:8px;padding:10px 14px;cursor:pointer;border:1.5px solid var(--ink);background:#fff;color:var(--ink)}
+.btn.primary{background:var(--ink);color:#fff}
+.btn:disabled{opacity:.4;cursor:default}
+.leaflet-container{font-family:inherit}
+.pop b{display:block;font-size:1rem;margin-bottom:2px}
+.pop a{display:block;margin-top:4px}
+.leaflet-container .pop a.sv{display:block;margin:10px 0 8px;padding:10px 14px;border-radius:8px;background:var(--blue);color:#fff;
+  font-size:1rem;font-weight:800;text-align:center;text-decoration:none}
+.leaflet-container .pop a.sv:hover{background:var(--blue-dark)}
+.pop .rm{font:inherit;font-size:.78rem;margin-top:10px;border:0;background:none;color:var(--red);text-decoration:underline;padding:0;cursor:pointer}
+.pop .rm:hover{color:#7d1a15}
+.undo{font:inherit;font-weight:600;border:0;background:none;color:var(--blue-dark);text-decoration:underline;cursor:pointer;padding:0 0 0 4px}
+[hidden]{display:none!important}
+@media (max-width:860px){
+  .app{grid-template-columns:1fr;height:auto}
+  .panel{border-right:0;padding:22px 16px 28px}
+  .stage{height:80vh}
+  h1{font-size:2rem}
+}
+@media (prefers-reduced-motion:reduce){
+  .track i,fieldset{transition:none}
+  .spin{animation-duration:2.5s}
+  .track.busy i{animation:none;left:0;width:100%!important;opacity:.5}
+}
+</style>
+</head>
+<body>
+<div class="welcome" id="welcome" hidden>
+  <div class="welcome-box" id="welcomeBox" role="dialog" aria-modal="true" aria-labelledby="welcomeTitle" tabindex="-1">
+    <button type="button" class="welcome-x" id="welcomeX" aria-label="Close">×</button>
+    <h2 id="welcomeTitle">Welcome to Lookout</h2>
+    <p>Lookout builds a map of Street View locations that stand near one kind of place and face it: every lighthouse, windmill or castle with Street View nearby, for example. You then import the result into map-making.app.</p>
+    <ol>
+      <li><b>Choose what to look at.</b> Type a kind of place and pick a suggestion. You can also give words the name must contain.</li>
+      <li><b>Choose where.</b> Tick one or two countries at a time. Searching all <span id="welcomeN">119</span> countries with Street View at once is possible, but slow.</li>
+      <li><b>Set how close and how many,</b> then select "Find locations".</li>
+      <li><b>Review and download.</b> Check the locations on the map or under "List by name", remove the ones you don't want, then download the map file.</li>
+    </ol>
+    <div class="welcome-warn">
+      <b>Expect to wait, and sometimes to try again.</b>
+      The places come from free OpenStreetMap servers that are often busy and slow. A search can take a minute or more, and it can run out of time without a result. When that happens, select "Try again". It can take several attempts.
+    </div>
+    <div class="welcome-warn">
+      <b>Search one or two countries at a time.</b>
+      Searching all <span id="welcomeN2">119</span> Street View countries at once takes a long time and is likely to run out of time, except for rare kinds of place. In step 2, tick one or two countries, and run the search again for the next ones.
+    </div>
+    <button type="button" class="btn primary" id="welcomeOk">Start</button>
+  </div>
+</div>
+<div class="app">
+  <form class="panel" id="form" autocomplete="off">
+    <h1>Lookout</h1>
+    <p class="lede">Build a map of Street View spots that stand near one kind of place and face it. Import the result into map-making.app. <button type="button" class="howbtn" id="howBtn">How it works</button></p>
+
+    <fieldset id="fields">
+    <section class="step" id="ownStep" hidden>
+      <h2><span class="n">1</span>Your own places</h2>
+      <div class="picked" id="ownSummary"></div>
+      <div class="field">
+        <label for="ownLabel">What are these places?</label>
+        <input type="text" id="ownLabel" maxlength="80" placeholder="for example Castles">
+        <p class="hint">Used for the map name and the kind-of-place tag.</p>
+      </div>
+      <button type="button" class="btn" id="ownRemove">Remove these places and search OpenStreetMap instead</button>
+    </section>
+    <section class="step" id="stepKind">
+      <h2><span class="n">1</span>What should each location look at?</h2>
+      <div class="labelrow">
+        <label for="kind">Kind of place</label>
+        <select id="lang" aria-label="Language for suggestions"></select>
+      </div>
+      <div class="combo">
+        <input type="text" id="kind" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="suggest"
+          placeholder="Start typing, for example lighthouse" spellcheck="false">
+        <ul class="suggest" id="suggest" role="listbox" hidden></ul>
+      </div>
+      <div class="picked" id="picked" hidden></div>
+      <div class="field">
+        <label for="nameHas">Name contains <span class="opt">optional</span></label>
+        <input type="text" id="nameHas" placeholder="for example alpaka, alpaca" spellcheck="false">
+        <p class="hint">Keeps only places whose name includes one of these words. Separate alternatives with commas. Works together with a kind of place, or alone.</p>
+      </div>
+      <details class="help" id="help">
+        <summary>Can't find it? Write a tag yourself</summary>
+        <div class="body">
+          <p>Places come from OpenStreetMap, where every object carries labels called tags, written as <code>key=value</code>. The suggestions cover the common ones. Anything else can be typed straight into the field.</p>
+          <table class="syntax">
+            <tr><td><code>historic=castle</code></td><td>Everything tagged as a castle.</td></tr>
+            <tr><td><code>amenity=pub|bar</code></td><td>Either value. Separate choices with <code>|</code>.</td></tr>
+            <tr><td><code>historic=*</code></td><td>Any value for that key.</td></tr>
+            <tr><td><code>amenity=fast_food, brand=KFC</code></td><td>Both tags must be present. Separate with a comma.</td></tr>
+          </table>
+          <h3>Looking for one specific thing</h3>
+          <p>Combine a kind of place with "Name contains". For replicas of the Statue of Liberty, choose "Artwork" and enter <code>liberty, liberté, freiheitsstatue, libertad</code>. Names are written in the local language, so add the spellings you expect.</p>
+          <h3>Finding the tag of a real place</h3>
+          <p>Open <a href="https://www.openstreetmap.org" target="_blank" rel="noopener">openstreetmap.org</a>, right-click an example and choose "Query features". Pick the entry in the list and read its tags. Use the one that says what the thing is, not its name or address.</p>
+          <div class="examples" id="examples"></div>
+        </div>
+      </details>
+    </section>
+
+    <section class="step" id="stepWhere">
+      <h2><span class="n">2</span>Where?</h2>
+      <label class="radio"><input type="radio" name="scope" value="cov"><span><b>Countries with Street View</b><br><span class="hint" id="covHint"></span></span></label>
+      <label class="radio"><input type="radio" name="scope" value="pick" checked><span><b>Only the countries I choose</b></span></label>
+      <div id="pickBox" hidden>
+        <div class="chips" id="chips"></div>
+        <input type="search" id="countrySearch" placeholder="Search countries" aria-label="Search countries">
+        <div class="countries" id="countries"></div>
+      </div>
+      <label class="radio"><input type="radio" name="scope" value="world"><span><b>Whole world</b><br><span class="hint">Includes countries Google has not driven. Locations get no country code.</span></span></label>
+      <div class="msg note" id="scopeNote" hidden></div>
+    </section>
+
+    <section class="step">
+      <h2><span class="n" id="lastStepNo">3</span>How close, and how many?</h2>
+      <div class="row">
+        <div>
+          <label for="maxDist">At most this far away</label>
+          <div class="unit"><input type="number" id="maxDist" min="5" max="2000" step="5" value="25"><span>m</span></div>
+        </div>
+        <div>
+          <div class="labelrow tight">
+            <label for="target">Locations wanted</label>
+            <button type="button" class="info" id="targetInfoBtn" aria-expanded="false" aria-controls="targetInfo" aria-label="What does Locations wanted do?">?</button>
+          </div>
+          <input type="number" id="target" min="1" max="100000" step="1" value="500">
+        </div>
+      </div>
+      <div class="infobox" id="targetInfo" hidden>
+        <p><b>The search stops once this many locations are found.</b> It is an upper limit, not a promise: if fewer places have Street View within range, you get all of those.</p>
+        <ul>
+          <li>Every matching place is fetched from OpenStreetMap first, then checked in random order. You get a random selection, and running the search again gives a different one.</li>
+          <li>Locations are not spread evenly. Countries with more matching places get more locations.</li>
+          <li>To get every place, enter a number higher than the places found. The largest allowed is 100,000.</li>
+          <li>If you remove a location while the search is running, it looks for a replacement.</li>
+        </ul>
+      </div>
+      <p class="hint">Shorter distances give clearer views but fewer locations. Raise it for large buildings and grounds.</p>
+      <div class="field">
+        <label for="minDist">At least this far away</label>
+        <div class="unit"><input type="number" id="minDist" min="0" max="1000" step="5" value="0"><span>m</span></div>
+        <p class="hint">Raise this for tall things that are hard to see from right underneath.</p>
+      </div>
+      <label class="check"><input type="checkbox" id="official" checked><span>Official Google coverage only<br><span class="hint">Skips photos uploaded by other people.</span></span></label>
+      <label class="check" id="tagCountryRow"><input type="checkbox" id="tagCountry" checked><span>Tag each location with its country<span class="hint" id="tagCountryHint" hidden></span></span></label>
+      <label class="check"><input type="checkbox" id="tags"><span>Tag each location with the kind of place</span></label>
+      <label class="check"><input type="checkbox" id="tagName"><span>Tag each location with the name of the place<br><span class="hint">Only where OpenStreetMap has a name for it.</span></span></label>
+      <label class="check"><input type="checkbox" id="tagRoad"><span>Tag each location with "Has road name" or "No road name"<br><span class="hint">Whether Street View shows a street name on the ground at that spot. Needs the Maps JavaScript API enabled on the Google key.</span></span></label>
+      <div class="field">
+        <label for="mapName">Map name</label>
+        <input type="text" id="mapName" placeholder="Filled in for you">
+      </div>
+      <div class="field" id="keyBox" hidden>
+        <label for="apiKey">Google API key</label>
+        <input type="password" id="apiKey" placeholder="AIza…" spellcheck="false">
+        <p class="hint">Needs the Street View Static API enabled. Kept only until you close this tab.</p>
+      </div>
+    </section>
+    </fieldset>
+
+    <button class="go" id="go" type="submit">Find locations</button>
+    <div class="again" id="againBox" hidden>
+      <button class="btn" id="again" type="button">Check Street View again on the same places</button>
+      <p class="hint" id="againHint"></p>
+    </div>
+    <button class="sharebtn" id="share" type="button">Copy a link to this search</button>
+    <div id="message" class="msg" hidden role="alert"></div>
+
+    <details class="help" id="expert">
+      <summary>Expert: the OpenStreetMap query, or your own result</summary>
+      <div class="body">
+        <h3>The query</h3>
+        <p>The Overpass query for the settings in steps 1 and 2. It updates as you change them. Results come grouped by country: each country's area is followed by its places. The page itself sends this query in several parts, a few countries at a time.</p>
+        <textarea id="queryText" readonly rows="9" spellcheck="false" aria-label="Overpass query"></textarea>
+        <div class="qrow">
+          <button class="btn" type="button" id="copyQuery">Copy query</button>
+          <a id="turbo" href="https://overpass-turbo.eu/" target="_blank" rel="noopener">Open in Overpass Turbo</a>
+        </div>
+
+        <h3>Use your own Overpass server</h3>
+        <p>If you have access to a paid or private Overpass server, enter its address here, including your key. Examples: <code>https://tile.tracestrack.com/overpass/YOUR-KEY/</code> or <code>https://overpass.geofabrik.de/YOUR-KEY/api/interpreter</code>. The page tests the address before using it.</p>
+        <label for="srvUrl">Server address with key</label>
+        <input type="text" id="srvUrl" placeholder="https://…" spellcheck="false" autocomplete="off" autocapitalize="off">
+        <label class="radio srv"><input type="radio" name="srvMode" value="first" checked><span><b>Use it for every search</b><br><span class="hint">The public servers are only tried if it fails.</span></span></label>
+        <label class="radio srv"><input type="radio" name="srvMode" value="fallback"><span><b>Use it only as a fallback</b><br><span class="hint">The public servers are tried first; yours steps in when they time out or report an error.</span></span></label>
+        <label class="check"><input type="checkbox" id="srvRemember" checked><span>Remember this server in this browser<br><span class="hint">If unticked, it is kept only until you close this tab.</span></span></label>
+        <div class="qrow">
+          <button class="btn" type="button" id="srvSave">Test and use this server</button>
+          <button class="btn" type="button" id="srvForget" hidden>Forget this server</button>
+        </div>
+        <div class="picked" id="srvStatus" hidden></div>
+        <div class="msg error" id="srvError" hidden role="alert"></div>
+        <p class="hint">The address contains your key. It stays in this browser, is sent only to that server, and is never put into a shared link.</p>
+
+        <h3>Use your own Overpass result</h3>
+        <p>Run any query in Overpass Turbo and load its result here. The page then skips its own OpenStreetMap search and only checks Street View near your places.</p>
+        <p><b>Only one format is accepted: raw OSM data as JSON.</b> In Overpass Turbo choose Export, then Data, then "raw OSM data". The query must start with <code>[out:json]</code> and should end with <code>out center;</code> so that outlines get a position. GeoJSON, GPX, KML and XML files are not accepted.</p>
+        <p>Country codes and country tags are kept only if the query has the country grouping of the query above. The file is read in your browser and is not sent anywhere.</p>
+        <div class="drop" id="ownDrop">
+          <label class="btn" for="ownFile">Choose a file</label>
+          <input type="file" id="ownFile" accept=".json,.txt,.osm,application/json,text/plain" class="visually-hidden">
+          <span class="hint">or drop it here</span>
+        </div>
+        <textarea id="ownText" rows="4" spellcheck="false" placeholder="…or paste the raw OSM data here" aria-label="Paste raw OSM data"></textarea>
+        <div class="qrow"><button class="btn" type="button" id="ownUse">Use the pasted text</button></div>
+        <div class="msg error" id="ownError" hidden role="alert"></div>
+      </div>
+    </details>
+
+    <p class="foot">Place data and place names © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap contributors</a>, fetched through the Overpass API and taginfo. Street View lookups use Google's metadata service. A location being near a place does not guarantee the place is visible, so review the map before publishing it.</p>
+  </form>
+
+  <div class="stage" id="stage">
+    <div class="mapwrap">
+      <div id="map"></div>
+      <aside class="names" id="names" hidden aria-label="Named locations">
+        <div class="names-head">
+          <strong id="namesTitle">Named locations</strong>
+          <button type="button" class="btn" id="namesClose">Close</button>
+        </div>
+        <input type="search" id="namesFilter" placeholder="Filter by name or country" aria-label="Filter the list">
+        <ul id="namesList"></ul>
+        <p class="hint" id="namesNote"></p>
+      </aside>
+    </div>
+    <div class="empty" id="empty"><strong>Nothing found yet</strong>Choose a kind of place and select "Find locations".</div>
+    <div class="failcard" id="fail" hidden role="alert">
+      <div class="fail-title" id="failTitle"></div>
+      <p id="failText"></p>
+      <details id="failMore"><summary>Technical details</summary><pre id="failDetail"></pre></details>
+      <div class="fail-acts">
+        <button type="button" class="btn primary" id="failRetry" hidden>Try again</button>
+        <button type="button" class="btn" id="failClose">Close</button>
+      </div>
+    </div>
+    <div class="live" id="live" hidden role="status">
+      <div class="spin"></div>
+      <div>
+        <div class="live-title" id="liveTitle"></div>
+        <div class="live-sub" id="liveSub"></div>
+        <ol class="stages">
+          <li id="st1">Find the places on OpenStreetMap</li>
+          <li id="st2">Check Street View near each one</li>
+        </ol>
+      </div>
+    </div>
+    <div class="bar">
+      <div class="status" aria-live="polite">
+        <div class="now" id="now">Ready.</div>
+        <div class="track" id="track"><i id="fill"></i></div>
+        <div class="tally" id="tally"></div>
+      </div>
+      <div class="out">
+        <div class="count"><span id="count">0</span><small>locations</small></div>
+        <button class="btn primary" id="download" type="button" disabled>Download map file</button>
+        <button class="btn" id="copy" type="button" disabled>Copy</button>
+        <button class="btn" id="namesOpen" type="button" disabled aria-expanded="false" aria-controls="names">List by name</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>/*LEAFLET_JS*/</script>
+<script>
+/* Place catalogue: names and search words from the OpenStreetMap iD editor presets
+   (id-tagging-schema, ISC licence), in English, German, French, Spanish and Portuguese. */
+const CAT = /*CATALOG*/;
+</script>
+<script>
+"use strict";
+/* ---------- data ---------- */
+const LANGS = { en: "English", de: "Deutsch", fr: "Français", es: "Español", pt: "Português" };
+const EXAMPLES = ["tourism=viewpoint", "amenity=pub|bar", "historic=castle, ruins=yes", "amenity=fast_food, brand=KFC"];
+/* Countries and territories with official Street View along roads. Edit this list to change the default search area. */
+const DEFAULT_COVERAGE = "AD AE AL AR AS AT AU AX BA BD BE BG BM BO BR BT BW CA CC CH CL CO CR CW CX CY CZ DE DK DO EC EE ES FI FO FR GB GE GH GI GL GR GT GU HK HR HU ID IE IL IM IN IS IT JE JO JP KE KG KH KR KZ LA LI LK LS LT LU LV MC ME MK MN MO MP MT MX MY NA NG NL NO NP NZ OM PA PE PH PL PR PS PT PY QA RE RO RS RU RW SE SG SI SK SM SN ST SZ TH TN TR TW UA UG US UY VI VN XK ZA";
+const CONFIG = (() => {
+  try { const c = JSON.parse(document.getElementById("lookout-config").textContent); return c && typeof c === "object" ? c : {}; }
+  catch { console.warn("Lookout: the settings block is not valid JSON, using defaults."); return {}; }
+})();
+const GOOGLE_API_KEY = typeof CONFIG.googleApiKey === "string" && /^[A-Za-z0-9_-]{20,80}$/.test(CONFIG.googleApiKey.trim()) ? CONFIG.googleApiKey.trim() : "";
+const COVERAGE = new Set(String(typeof CONFIG.streetViewCountries === "string" ? CONFIG.streetViewCountries : DEFAULT_COVERAGE).split(/[\s,]+/).filter(c => /^[A-Z]{2}$/.test(c)));
+if (!COVERAGE.size) DEFAULT_COVERAGE.split(" ").forEach(c => COVERAGE.add(c));
+const CODES = ("AD AE AF AG AI AL AM AO AR AS AT AU AW AX AZ BA BB BD BE BF BG BH BI BJ BL BM BN BO BQ BR BS BT BW BY BZ " +
+  "CA CC CD CF CG CH CI CK CL CM CN CO CR CU CV CW CX CY CZ DE DJ DK DM DO DZ EC EE EG EH ER ES ET FI FJ FK FM FO FR " +
+  "GA GB GD GE GF GG GH GI GL GM GN GP GQ GR GS GT GU GW GY HK HN HR HT HU ID IE IL IM IN IO IQ IR IS IT JE JM JO JP " +
+  "KE KG KH KI KM KN KP KR KW KY KZ LA LB LC LI LK LR LS LT LU LV LY MA MC MD ME MF MG MH MK ML MM MN MO MP MQ MR MS " +
+  "MT MU MV MW MX MY MZ NA NC NE NF NG NI NL NO NP NR NU NZ OM PA PE PF PG PH PK PL PM PN PR PS PT PW PY QA RE RO RS " +
+  "RU RW SA SB SC SD SE SG SH SI SJ SK SL SM SN SO SR SS ST SV SX SY SZ TC TD TG TH TJ TK TL TM TN TO TR TT TV TW TZ " +
+  "UA UG US UY UZ VA VC VE VG VI VN VU WF WS XK YE YT ZA ZM ZW").split(" ");
+/* Countries whose OpenStreetMap area also contains other listed territories. */
+const PARENTS = new Set(["FR", "NL", "DK", "GB", "US", "AU", "NO", "FI", "CN", "NZ"]);
+const OVERPASS = [
+  "https://overpass-api.de/api/interpreter",
+  "https://overpass.private.coffee/api/interpreter",
+  "https://overpass.kumi.systems/api/interpreter",
+];
+const TAGINFO = "https://taginfo.openstreetmap.org/api/4/";
+const PARALLEL = 12;
+const WORLD_TIMEOUT = 180;         // seconds the OpenStreetMap server may spend on a whole-world search
+const PART_TIMEOUT = 90;           // seconds it may spend on one part of a country search
+const PART_WEIGHT = 15;            // how much goes into one part; see COUNTRY_WEIGHT
+const OSM_PARALLEL = 2;            // parts requested at the same time
+const RATE_WAIT = 20000;           // ms to pause when the servers ask to slow down
+/* Rough cost of searching a country (size and amount of map data). Unlisted countries count 1. */
+const COUNTRY_WEIGHT = { US: 8, RU: 8, CA: 8, BR: 8, AU: 8, DE: 5, FR: 5, IN: 5, JP: 5,
+  GB: 3, IT: 3, ES: 3, PL: 3, MX: 3, AR: 3, ID: 3, KZ: 3,
+  SE: 2, NO: 2, FI: 2, UA: 2, TR: 2, ZA: 2, NL: 2, CZ: 2, AT: 2, CH: 2, BE: 2, RO: 2, PE: 2, CO: 2, CL: 2, TH: 2, PH: 2,
+  MY: 2, NZ: 2, GR: 2, PT: 2, HU: 2, MN: 2, NG: 2, KE: 2, BO: 2, BW: 2, NA: 2, CN: 8, DZ: 2, SA: 2, IR: 2, EG: 2 };
+const cw = c => COUNTRY_WEIGHT[c] || 1;
+const weigh = codes => codes.reduce((n, c) => n + cw(c), 0);
+const TOO_MANY = 150000;   // above this many places worldwide, the user must choose countries
+const MIN_USES = 3;         // live tag suggestions used fewer times than this are hidden
+const MAX_DOTS = 4000;     // faint candidate dots drawn on the map
+
+/* ---------- helpers ---------- */
+const $ = id => document.getElementById(id);
+const fmt = n => n.toLocaleString("en");
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+const store = {
+  get(k, d) { try { const v = localStorage.getItem("lookout2." + k); return v === null ? d : JSON.parse(v); } catch { return d; } },
+  set(k, v) { try { localStorage.setItem("lookout2." + k, JSON.stringify(v)); } catch {} },
+};
+/* A visitor's own API key is kept for this browser tab only, never written to disk. */
+const keyStore = {
+  get() { try { return sessionStorage.getItem("lookout2.key") || ""; } catch { return ""; } },
+  set(v) { try { sessionStorage.setItem("lookout2.key", v); } catch {} },
+};
+try { localStorage.removeItem("lookout2.key"); localStorage.removeItem("lookout.key"); } catch {}
+let regionNames; try { regionNames = new Intl.DisplayNames(["en"], { type: "region" }); } catch {}
+const countryName = c => { try { const n = regionNames && regionNames.of(c); return n && n !== c ? n : c; } catch { return c; } };
+for (const c of [...COVERAGE]) if (!CODES.includes(c)) COVERAGE.delete(c);
+const COUNTRIES = CODES.map(c => ({ code: c, name: countryName(c) })).sort((a, b) => a.name.localeCompare(b.name));
+const rad = d => d * Math.PI / 180;
+function distance(aLat, aLng, bLat, bLng) {
+  const dLat = rad(bLat - aLat), dLng = rad(bLng - aLng);
+  const h = Math.sin(dLat / 2) ** 2 + Math.cos(rad(aLat)) * Math.cos(rad(bLat)) * Math.sin(dLng / 2) ** 2;
+  return 6371008.8 * 2 * Math.asin(Math.min(1, Math.sqrt(h)));
+}
+function bearing(aLat, aLng, bLat, bLng) {
+  const y = Math.sin(rad(bLng - aLng)) * Math.cos(rad(bLat));
+  const x = Math.cos(rad(aLat)) * Math.sin(rad(bLat)) - Math.sin(rad(aLat)) * Math.cos(rad(bLat)) * Math.cos(rad(bLng - aLng));
+  return (Math.atan2(y, x) * 180 / Math.PI + 360) % 360;
+}
+function shuffle(a) { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; }
+const esc = s => String(s).replace(/[&<>"'`]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;", "`": "&#96;" }[c]));
+const text = (v, max = 200) => typeof v === "string" ? v.slice(0, max) : "";
+const finite = (n, lo, hi) => typeof n === "number" && Number.isFinite(n) && n >= lo && n <= hi;
+const norm = s => s.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
+
+/* "key=value, key2=a|b, key3=*" -> list of {key, values|null}. Throws a readable message. */
+function parseTags(text) {
+  const parts = text.split(/[,\n]/).map(s => s.trim()).filter(Boolean);
+  if (!parts.length) throw new Error("Choose a kind of place in step 1.");
+  return parts.map(p => {
+    const i = p.indexOf("=");
+    const key = (i < 0 ? p : p.slice(0, i)).trim();
+    const val = i < 0 ? "*" : p.slice(i + 1).trim();
+    if (!key || /\s/.test(key)) throw new Error(`"${p}" is not a tag. Pick one of the suggestions, or write a tag as key=value, for example historic=castle.`);
+    if (val === "" || val === "*") return { key, values: null };
+    return { key, values: val.split("|").map(v => v.trim()).filter(Boolean) };
+  });
+}
+const q = s => '"' + s.replace(/\\/g, "\\\\").replace(/"/g, '\\"') + '"';
+const nameWords = () => $("nameHas").value.split(/[,|\n]/).map(s => s.trim()).filter(Boolean);
+/* Overpass filter for "name contains any of these words", ignoring upper and lower case. */
+function nameFilter() {
+  const w = nameWords();
+  if (!w.length) return "";
+  const short = w.find(x => x.length < 3);
+  if (short) throw new Error(`"${short}" is too short for a name search. Use three letters or more.`);
+  return `["name"~${q(w.map(x => x.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|"))},i]`;
+}
+function searchLabel() {
+  const w = nameWords(), n = w.length ? w[0].charAt(0).toUpperCase() + w[0].slice(1) : "";
+  return kind ? (n ? `${kind.label}: ${n}` : kind.label) : n;
+}
+function tagFilter(text) {
+  return parseTags(text).map(({ key, values }) => {
+    if (!values) return `[${q(key)}]`;
+    if (values.length > 1) return `[${q(key)}~${q("^(" + values.map(v => v.replace(/[.*+?^${}()[\]\\]/g, "\\$&")).join("|") + ")$")}]`;
+    return `[${q(key)}=${q(values[0])}]`;
+  }).join("");
+}
+
+/* The user's own (paid or private) Overpass server, if one is set: { url, mode } with mode "first" or "fallback". */
+let osmOwn = null;
+const osmUse = { own: 0, pub: 0, ownTrouble: "" };      // what answered during the current search
+const hostOf = u => { try { return new URL(u).host; } catch { return "the server"; } };   // never show the path: it holds the key
+
+/* ---------- catalogue search ---------- */
+let lang = store.get("lang", null) || (navigator.language || "en").slice(0, 2).toLowerCase();
+if (!LANGS[lang]) lang = "en";
+const indexCache = {};
+function index(l) {
+  return indexCache[l] ??= CAT[l].map((s, i) => {
+    const parts = (s || CAT.en[i]).split("\t");
+    return { name: parts[0], n: norm(parts[0]), terms: parts.slice(1).map(norm) };
+  });
+}
+const catName = tag => { const i = CAT.t.indexOf(tag); return i < 0 ? null : index(lang)[i].name; };
+function scoreEntry(e, q) {
+  if (e.n === q) return 0;
+  if (e.n.startsWith(q)) return 1;
+  if (e.n.includes(" " + q) || e.n.includes("-" + q)) return 2;
+  if (e.terms.some(t => t === q)) return 2.5;
+  if (e.terms.some(t => t.startsWith(q) || t.includes(" " + q))) return 3;
+  if (q.length >= 3 && e.n.includes(q)) return 4;
+  if (q.length >= 4 && e.terms.some(t => t.includes(q))) return 5;
+  return -1;
+}
+function searchCatalogue(text, limit = 8) {
+  const q = norm(text.trim());
+  if (q.length < 2) return [];
+  const main = index(lang), en = lang === "en" ? null : index("en"), hits = [];
+  for (let i = 0; i < CAT.t.length; i++) {
+    let s = scoreEntry(main[i], q);
+    if (s < 0 && en) { const s2 = scoreEntry(en[i], q); if (s2 >= 0) s = s2 + 0.4; }
+    if (s < 0 && q.length >= 3) { const t = CAT.t[i]; if (t.includes("=" + q) || t.includes("_" + q)) s = 6; }
+    if (s >= 0) hits.push({ s, i });
+  }
+  hits.sort((a, b) => a.s - b.s || CAT.t[a.i].split(",").length - CAT.t[b.i].split(",").length || main[a.i].name.length - main[b.i].name.length);
+  return hits.slice(0, limit).map(h => ({ label: main[h.i].name, tag: CAT.t[h.i] }));
+}
+
+/* ---------- taginfo (live) ---------- */
+const JUNK_KEY = /^(name|addr|source|note|description|ref|operator|brand|network|website|url|contact|wikipedia|wikidata|is_in|destination|fixme|comment|image|email|phone|opening_hours|created_by|tiger|gnis|nhd|import|start_date|type|layer|surface|access|service)\b|name$|:name|^.*:(source|ref|note)$/i;
+const SAFE_KEY = /^[A-Za-z0-9_:.-]{1,60}$/;
+const pretty = v => { const s = v.replace(/_/g, " "); return s.charAt(0).toUpperCase() + s.slice(1); };
+async function taginfoSearch(text, signal) {
+  const qs = encodeURIComponent(text.trim().toLowerCase().replace(/\s+/g, "_"));
+  const get = async u => { try { const d = (await (await fetch(TAGINFO + u, { signal })).json()).data; return Array.isArray(d) ? d : []; } catch { return []; } };
+  const [vals, keys] = await Promise.all([
+    get(`search/by_value?query=${qs}&sortname=count_all&sortorder=desc&rp=30&page=1`),
+    get(`keys/all?query=${qs}&sortname=count_all&sortorder=desc&rp=10&page=1`),
+  ]);
+  const a = vals
+    .filter(d => d && typeof d.key === "string" && SAFE_KEY.test(d.key) && !JUNK_KEY.test(d.key) && typeof d.value === "string" && /^[a-z0-9_]{2,40}$/.test(d.value) && Number(d.count_all) >= MIN_USES)
+    .map(d => ({ label: pretty(d.value), tag: `${d.key}=${d.value}`, count: Math.floor(Number(d.count_all)) }));
+  const b = keys
+    .filter(d => d && typeof d.key === "string" && !JUNK_KEY.test(d.key) && /^[a-z0-9_:]{2,40}$/.test(d.key) && Number(d.count_all) >= MIN_USES)
+    .map(d => ({ label: pretty(d.key.replace(/:/g, " ")) + " (any value)", tag: `${d.key}=*`, count: Math.floor(Number(d.count_all)) }));
+  return [...a, ...b].sort((x, y) => y.count - x.count);
+}
+const countCache = new Map();
+async function countPart({ key, values }) {
+  const one = async v => {
+    const u = v === null ? `${TAGINFO}key/stats?key=${encodeURIComponent(key)}` : `${TAGINFO}tag/stats?key=${encodeURIComponent(key)}&value=${encodeURIComponent(v)}`;
+    const j = await (await fetch(u)).json();
+    const all = (Array.isArray(j.data) ? j.data : []).find(d => d && d.type === "all");
+    if (!all || !finite(all.count, 0, 1e11)) throw new Error("no count");
+    return all.count;
+  };
+  const counts = await Promise.all((values || [null]).map(one));
+  return counts.reduce((a, b) => a + b, 0);
+}
+/* Upper bound for how many places match: the rarest of the combined tags. */
+function worldCount(tag) {
+  if (!countCache.has(tag)) {
+    countCache.set(tag, (async () => {
+      try { return Math.min(...await Promise.all(parseTags(tag).map(countPart))); } catch { return null; }
+    })());
+  }
+  return countCache.get(tag);
+}
+
+/* ---------- step 1: kind picker ---------- */
+let kind = store.get("kind", null);           // {label, tag, count?}
+let items = [], active = -1, searchSeq = 0, searchAbort = null, searchTimer = 0;
+const kindEl = $("kind"), listEl = $("suggest");
+for (const [code, name] of Object.entries(LANGS)) { const o = document.createElement("option"); o.value = code; o.textContent = name; $("lang").append(o); }
+$("lang").value = lang;
+
+function renderSuggest(cat, more, loading) {
+  items = [...cat, ...more];
+  if (!items.length && !loading) { closeSuggest(); return; }
+  let h = "", n = 0;
+  const row = it => `<li role="option" id="opt${n}" data-i="${n++}" aria-selected="false"><span><span class="nm">${esc(it.label)}</span><span class="tg">${esc(it.tag)}</span></span>${it.count ? `<span class="ct">${fmt(it.count)}</span>` : ""}</li>`;
+  h += cat.map(row).join("");
+  if (more.length) h += `<li class="grp" role="presentation">More tags from OpenStreetMap, with how many exist</li>` + more.map(row).join("");
+  else if (loading) h += `<li class="grp" role="presentation">Looking for more on OpenStreetMap…</li>`;
+  listEl.innerHTML = h; listEl.hidden = false; kindEl.setAttribute("aria-expanded", "true");
+  setActive(cat.length ? 0 : -1);
+}
+function setActive(i) {
+  active = i;
+  listEl.querySelectorAll("li[role=option]").forEach(li => li.setAttribute("aria-selected", +li.dataset.i === i ? "true" : "false"));
+  if (i >= 0) { kindEl.setAttribute("aria-activedescendant", "opt" + i); $("opt" + i)?.scrollIntoView({ block: "nearest" }); }
+  else kindEl.removeAttribute("aria-activedescendant");
+}
+function closeSuggest() { listEl.hidden = true; kindEl.setAttribute("aria-expanded", "false"); active = -1; searchAbort?.abort(); clearTimeout(searchTimer); }
+function onKindInput() {
+  const text = kindEl.value;
+  kind = null; renderPicked();
+  searchAbort?.abort(); clearTimeout(searchTimer);
+  const seq = ++searchSeq;
+  if (text.includes("=")) { closeSuggest(); rawKind(); return; }
+  const cat = searchCatalogue(text);
+  const live = text.trim().length >= 3;
+  renderSuggest(cat, [], live);
+  if (!live) return;
+  searchTimer = setTimeout(async () => {
+    searchAbort = new AbortController();
+    let more = [];
+    try { more = await taginfoSearch(text, searchAbort.signal); } catch {}
+    if (seq !== searchSeq || listEl.hidden && !cat.length && !more.length) return;
+    const have = new Set(cat.map(c => c.tag));
+    renderSuggest(cat, more.filter(m => !have.has(m.tag)).slice(0, 6), false);
+  }, 350);
+}
+/* Text typed as key=value is used as it is. */
+function rawKind() {
+  const text = kindEl.value.trim();
+  try { parseTags(text); kind = { label: catName(text) || text, tag: text, raw: true }; } catch { kind = null; }
+  renderPicked();
+}
+function choose(it) {
+  kind = { label: it.label, tag: it.tag };
+  kindEl.value = it.label; closeSuggest(); renderPicked();
+}
+function renderPicked() {
+  const el = $("picked"), words = nameWords();
+  suggestName();
+  store.set("kind", kind ? { label: kind.label, tag: kind.tag, raw: kind.raw } : null);
+  store.set("nameHas", $("nameHas").value);
+  if (!kind && !words.length) { el.hidden = true; return; }
+  const named = words.length ? ` with a name containing ${words.map(w => `<code>${esc(w)}</code>`).join(" or ")}` : "";
+  if (!kind) {
+    el.innerHTML = `Searching for any place${named}<span class="warn">A name search without a kind of place is slow. It needs "Only the countries I choose" in step 2.</span>`;
+    el.hidden = false; return;
+  }
+  const first = parseTags(kind.tag)[0];
+  const url = first.values && first.values.length === 1
+    ? `https://taginfo.openstreetmap.org/tags/${encodeURIComponent(first.key)}=${encodeURIComponent(first.values[0])}`
+    : `https://taginfo.openstreetmap.org/keys/${encodeURIComponent(first.key)}`;
+  const tag = kind.tag;
+  const paint = count => {
+    if (!kind || kind.tag !== tag) return;
+    let h = `Searching for <code>${esc(tag)}</code>${named}`;
+    if (count === undefined) h += `<br><span class="hint">Counting them on OpenStreetMap…</span>`;
+    else if (count === null) h += `<br><a href="${url}" target="_blank" rel="noopener">See this tag on taginfo</a>`;
+    else {
+      const multi = parseTags(tag).length > 1;
+      h += `<br>${count === 0 ? "None" : (multi ? "At most " : "About ") + fmt(count)} on OpenStreetMap worldwide${named ? ", before the name filter" : ""}. <a href="${url}" target="_blank" rel="noopener">Details</a>`;
+      if (count === 0) h += `<span class="warn">Nothing uses this tag. Check the spelling.</span>`;
+      else if (count > TOO_MANY && !named) h += `<span class="warn">That is a lot. Choose "Only the countries I choose" in step 2.</span>`;
+    }
+    el.innerHTML = h; el.hidden = false;
+  };
+  paint(undefined);
+  worldCount(tag).then(c => { if (kind && kind.tag === tag) kind.count = c; paint(c); });
+}
+$("nameHas").addEventListener("input", renderPicked);
+kindEl.addEventListener("input", onKindInput);
+kindEl.addEventListener("focus", () => { if (!kind && kindEl.value.trim().length >= 2) onKindInput(); });
+kindEl.addEventListener("keydown", e => {
+  if (listEl.hidden) { if (e.key === "ArrowDown" && kindEl.value.trim()) onKindInput(); return; }
+  if (e.key === "ArrowDown") { e.preventDefault(); setActive(Math.min(items.length - 1, active + 1)); }
+  else if (e.key === "ArrowUp") { e.preventDefault(); setActive(Math.max(0, active - 1)); }
+  else if (e.key === "Enter") { if (active >= 0) { e.preventDefault(); choose(items[active]); } }
+  else if (e.key === "Escape") closeSuggest();
+});
+listEl.addEventListener("mousedown", e => { const li = e.target.closest("li[role=option]"); if (li) { e.preventDefault(); choose(items[+li.dataset.i]); } });
+kindEl.addEventListener("blur", () => setTimeout(closeSuggest, 120));
+$("examples").innerHTML = EXAMPLES.map(t => `<button type="button" data-t="${esc(t)}"><code>${esc(t)}</code></button>`).join("");
+$("examples").onclick = e => { const b = e.target.closest("button"); if (b) { kindEl.value = b.dataset.t; rawKind(); kindEl.focus(); } };
+$("lang").onchange = () => {
+  lang = $("lang").value; store.set("lang", lang);
+  if (kind) { const n = catName(kind.tag); if (n) { kind.label = n; kindEl.value = n; renderPicked(); } }
+};
+
+/* ---------- step 2: where ---------- */
+const selected = new Set(store.get("countries", []).filter(c => CODES.includes(c)));
+const scope = () => document.querySelector("input[name=scope]:checked").value;
+$("covHint").textContent = `The ${COVERAGE.size} countries and territories Google has driven.`;
+function renderCountries() {
+  const q = $("countrySearch").value.trim().toLowerCase();
+  const list = COUNTRIES.filter(c => !q || c.name.toLowerCase().includes(q) || c.code.toLowerCase() === q);
+  const row = c => `<label><input type="checkbox" value="${c.code}" ${selected.has(c.code) ? "checked" : ""}>${esc(c.name)}</label>`;
+  const yes = list.filter(c => COVERAGE.has(c.code)), no = list.filter(c => !COVERAGE.has(c.code));
+  $("countries").innerHTML = list.length
+    ? (yes.length ? `<div class="grp">With Street View</div>` + yes.map(row).join("") : "") +
+      (no.length ? `<div class="grp">No official Street View</div>` + no.map(row).join("") : "")
+    : `<div class="none">No country matches that search.</div>`;
+  $("chips").innerHTML = [...selected].map(c => `<button type="button" class="chip${COVERAGE.has(c) ? "" : " off"}" data-c="${c}" aria-label="Remove ${esc(countryName(c))}">${esc(countryName(c))}</button>`).join("");
+  store.set("countries", [...selected]);
+  renderScope();
+}
+function renderScope() {
+  const s = scope();
+  $("pickBox").hidden = s !== "pick";
+  updateCountryTag();
+  store.set("scope", s);
+  const note = $("scopeNote"), off = [...selected].filter(c => !COVERAGE.has(c));
+  const official = $("official").checked;
+  let text = "";
+  if (official && s === "pick" && off.length) {
+    const names = off.slice(0, 3).map(countryName).join(", ") + (off.length > 3 ? ` and ${off.length - 3} more` : "");
+    text = `${names} ${off.length === 1 ? "has" : "have"} no official Street View, so nothing will be found there while "Official Google coverage only" is on.`;
+  } else if (official && s === "world") {
+    text = `Countries Google has not driven only have photos uploaded by other people. They are skipped while "Official Google coverage only" is on.`;
+  }
+  note.hidden = !text;
+  if (text) note.innerHTML = `${esc(text)}<button type="button" id="allowUnofficial">Include photos from other people</button>`;
+  suggestName();
+}
+$("scopeNote").onclick = e => { if (e.target.id === "allowUnofficial") { $("official").checked = false; renderScope(); } };
+$("official").onchange = renderScope;
+document.querySelectorAll("input[name=scope]").forEach(r => r.onchange = renderScope);
+$("countrySearch").oninput = renderCountries;
+$("countries").onchange = e => { e.target.checked ? selected.add(e.target.value) : selected.delete(e.target.value); renderCountries(); };
+$("chips").onclick = e => { const c = e.target.dataset.c; if (c) { selected.delete(c); renderCountries(); } };
+function renderQuery() {
+  const box = $("queryText"), link = $("turbo");
+  let text = "", ok = false;
+  try {
+    const s = scope(), codes = s === "world" ? null : s === "cov" ? [...COVERAGE] : [...selected];
+    const filter = (kind ? tagFilter(kind.tag) : "") + nameFilter();
+    if (!filter) text = "Choose a kind of place or enter a name in step 1.";
+    else if (codes && !codes.length) text = "Tick one or more countries in step 2.";
+    else { text = buildQuery(filter, codes, true, true); ok = true; }
+  } catch (e) { text = e.message; }
+  box.value = text; $("copyQuery").disabled = !ok;
+  link.href = ok ? "https://overpass-turbo.eu/?Q=" + encodeURIComponent(text) : "https://overpass-turbo.eu/";
+}
+$("copyQuery").onclick = async () => {
+  const b = $("copyQuery");
+  try { await navigator.clipboard.writeText($("queryText").value); b.textContent = "Copied"; }
+  catch { $("queryText").select(); b.textContent = "Press Ctrl+C"; }
+  setTimeout(() => b.textContent = "Copy query", 1500);
+};
+$("expert").open = store.get("expert", false);
+$("expert").ontoggle = () => store.set("expert", $("expert").open);
+function suggestName() {
+  renderQuery();
+  const s = scope();
+  const where = s === "world" ? "Whole world" : s === "cov" ? "World" : selected.size === 0 ? "" : selected.size <= 2 ? [...selected].map(countryName).join(" and ") : selected.size + " countries";
+  if (own) { $("mapName").placeholder = ownLabel(); return; }
+  const what = searchLabel();
+  $("mapName").placeholder = what ? `${what}${where ? ` (${where})` : ""}` : "Filled in for you";
+}
+
+$("targetInfoBtn").onclick = () => {
+  const box = $("targetInfo"), open = box.hidden;
+  box.hidden = !open; $("targetInfoBtn").setAttribute("aria-expanded", String(open));
+};
+
+// restore saved settings
+for (const id of ["maxDist", "minDist", "target"]) { const v = store.get(id, null); if (v !== null) $(id).value = v; }
+$("official").checked = store.get("official", true);
+$("tagCountry").checked = store.get("tagCountry", true);
+$("tags").checked = store.get("tagKind", false);
+$("tagName").checked = store.get("tagName", false);
+$("tagRoad").checked = store.get("tagRoad", false);
+{ const s = store.get("scope", "pick"); const r = document.querySelector(`input[name=scope][value=${["cov", "pick", "world"].includes(s) ? s : "pick"}]`); r.checked = true; }
+$("keyBox").hidden = !!GOOGLE_API_KEY;
+$("apiKey").value = keyStore.get();
+$("nameHas").value = store.get("nameHas", "");
+if (kind && kind.tag) { try { parseTags(kind.tag); kind.label = catName(kind.tag) || kind.label; kindEl.value = kind.raw ? kind.tag : kind.label; } catch { kind = null; } } else kind = null;
+
+/* ---------- your own Overpass server ---------- */
+const srvStore = {
+  load() {
+    for (const st of [() => localStorage, () => sessionStorage]) {
+      try { const v = JSON.parse(st().getItem("lookout2.osmOwn") || "null"); if (v && cleanServer(v.url) && ["first", "fallback"].includes(v.mode)) return { url: v.url, mode: v.mode, remembered: st() === localStorage }; } catch {}
+    }
+    return null;
+  },
+  save(v, remember) { this.clear(); try { (remember ? localStorage : sessionStorage).setItem("lookout2.osmOwn", JSON.stringify({ url: v.url, mode: v.mode })); } catch {} },
+  clear() { try { localStorage.removeItem("lookout2.osmOwn"); } catch {} try { sessionStorage.removeItem("lookout2.osmOwn"); } catch {} },
+};
+/* A usable server address: https only, no fragment. Returns the cleaned address or "". */
+function cleanServer(raw) {
+  let u; try { u = new URL(String(raw).trim()); } catch { return ""; }
+  if (u.protocol !== "https:" || !u.hostname || u.username || u.password) return "";
+  u.hash = "";
+  return u.toString();
+}
+/* Addresses to try for what the user typed: as given if it names the interpreter, otherwise the two usual endings. */
+function serverCandidates(clean) {
+  const u = new URL(clean);
+  if (/\/interpreter\/?$/.test(u.pathname)) return [clean];
+  const base = clean.split("?")[0].replace(/\/?$/, "/"), q = u.search;
+  return [base + "api/interpreter" + q, base + "interpreter" + q];
+}
+async function testServer(url) {
+  const ctl = new AbortController(), timer = setTimeout(() => ctl.abort(), 20000);
+  try {
+    const r = await fetch(url, { method: "POST", body: "data=" + encodeURIComponent("[out:json][timeout:10];node(1);out ids;"), signal: ctl.signal,
+      headers: { "Content-Type": "application/x-www-form-urlencoded" } });
+    if (r.status === 401 || r.status === 403) return { ok: false, why: `it refused access (HTTP ${r.status}); check the key` };
+    if (r.status === 429) return { ok: false, why: "it says there were too many requests (HTTP 429); the address looks right, try again shortly", maybe: true };
+    if (!r.ok) return { ok: false, why: `it answered HTTP ${r.status}` };
+    let j; try { j = await r.json(); } catch { return { ok: false, why: "it did not answer with Overpass data" }; }
+    return j && Array.isArray(j.elements) ? { ok: true } : { ok: false, why: "it did not answer with Overpass data" };
+  } catch (e) {
+    return { ok: false, why: ctl.signal.aborted ? "it did not answer within 20 seconds" : "the browser could not reach it (wrong address, or the server does not allow requests from web pages)" };
+  } finally { clearTimeout(timer); }
+}
+const srvMode = () => document.querySelector("input[name=srvMode]:checked").value;
+function renderServer() {
+  const st = $("srvStatus"); st.hidden = !osmOwn; $("srvForget").hidden = !osmOwn;
+  if (!osmOwn) return;
+  st.textContent = "";
+  const strong = document.createElement("b"); strong.textContent = `In use: ${hostOf(osmOwn.url)}`;
+  st.append(strong, document.createElement("br"),
+    `${osmOwn.mode === "first" ? "Used for every search; the public servers only if it fails." : "Used only when the public servers fail."} ${$("srvRemember").checked ? "Remembered in this browser." : "Kept until you close this tab."}`);
+}
+function srvProblem(msg) { const e = $("srvError"); e.hidden = !msg; e.textContent = msg || ""; }
+$("srvSave").onclick = async () => {
+  srvProblem("");
+  const clean = cleanServer($("srvUrl").value);
+  if (!clean) return srvProblem("Enter the full address of the server, starting with https://.");
+  const b = $("srvSave"); b.disabled = true; b.textContent = "Testing…";
+  let found = "", why = "", maybe = "";
+  for (const c of serverCandidates(clean)) {
+    const t = await testServer(c);
+    if (t.ok) { found = c; break; }
+    why = why || t.why; if (t.maybe) maybe = maybe || c;
+  }
+  b.disabled = false; b.textContent = "Test and use this server";
+  const named = /\/interpreter\/?(\?|$)/.test(clean);
+  if (!found && !named && !maybe) return srvProblem(`The test request failed: ${why}. If the address is right, enter it in full, ending in "/interpreter".`);
+  osmOwn = { url: found || maybe || clean, mode: srvMode() };
+  srvStore.save(osmOwn, $("srvRemember").checked);
+  $("srvUrl").value = osmOwn.url; renderServer();
+  if (!found) srvProblem(`The server is saved, but the test request failed: ${why}. Searches will fall back to the public servers while it does not answer.`);
+};
+$("srvForget").onclick = () => { osmOwn = null; srvStore.clear(); $("srvUrl").value = ""; srvProblem(""); renderServer(); };
+const srvResave = () => { if (osmOwn) { osmOwn.mode = srvMode(); srvStore.save(osmOwn, $("srvRemember").checked); renderServer(); } };
+document.querySelectorAll("input[name=srvMode]").forEach(r => r.onchange = srvResave);
+$("srvRemember").onchange = srvResave;
+{ const v = srvStore.load();
+  if (v) { osmOwn = { url: v.url, mode: v.mode }; $("srvUrl").value = v.url; $("srvRemember").checked = v.remembered;
+    document.querySelector(`input[name=srvMode][value=${v.mode}]`).checked = true; }
+  renderServer(); }
+
+/* ---------- your own Overpass result: state ---------- */
+let own = null;      // { places, noPosition, lines, worked, hasCc, countries, source }
+function updateCountryTag() {
+  const off = own ? !own.hasCc : scope() === "world";
+  $("tagCountry").disabled = off; $("tagCountryRow").classList.toggle("off", off);
+  const h = $("tagCountryHint"); h.hidden = !off;
+  if (off) { h.textContent = ""; h.append(document.createElement("br"), own ? "Not available: this result does not say which country each place is in." : "Not available with \"Whole world\", which does not know the country of a place."); }
+}
+const lastStep = () => own ? 2 : 3;
+function emptyText(title, body) {
+  const e = $("empty"); e.textContent = "";
+  const t = document.createElement("strong"); t.textContent = title; e.append(t, body);
+}
+function renderOwn() {
+  $("lastStepNo").textContent = lastStep();
+  if (own) emptyText("Your places are loaded", "Check the settings on the left, then select \"Find locations\".");
+  else emptyText("Nothing found yet", "Choose a kind of place and select \"Find locations\".");
+  $("ownStep").hidden = !own; $("stepKind").hidden = !!own; $("stepWhere").hidden = !!own; renderAgain();
+  $("share").hidden = !!own;
+  if (own) {
+    const el = $("ownSummary"); el.textContent = "";
+    const b = document.createElement("b"); b.textContent = `${fmt(own.places.length)} ${own.places.length === 1 ? "place" : "places"} from ${own.source}`;
+    el.append(b);
+    const lines = [];
+    lines.push(own.hasCc ? `Country known for places in ${fmt(own.countries)} ${own.countries === 1 ? "country" : "countries"}.` : "No country information in this result, so locations get no country code.");
+    if (own.worked) lines.push(`${fmt(own.worked)} ${own.worked === 1 ? "outline has" : "outlines have"} no centre in the file; the middle of ${own.worked === 1 ? "its" : "their"} shape is used.`);
+    if (own.noPosition) lines.push(`${fmt(own.noPosition)} ${own.noPosition === 1 ? "object was" : "objects were"} skipped because ${own.noPosition === 1 ? "it has" : "they have"} no position. End the query with "out center;" to include ${own.noPosition === 1 ? "it" : "them"}.`);
+    if (own.lines) lines.push(`${fmt(own.lines)} ${own.lines === 1 ? "is a line" : "are lines"} such as a road or river. Locations will face the middle of the line.`);
+    if (own.places.length > OWN_MANY) lines.push("That is a very large number of places. Checking them all takes a long time; \"Locations wanted\" stops the search earlier.");
+    for (const l of lines) { el.append(document.createElement("br"), l); }
+  }
+  updateCountryTag(); suggestName();
+}
+function loadOwn(raw, source) {
+  const err = $("ownError"); err.hidden = true;
+  if (running) return;
+  try {
+    own = { ...parseOwn(raw), source };
+    if (!$("ownLabel").value.trim()) $("ownLabel").value = /\.\w+$/.test(source) ? source.replace(/\.\w+$/, "").replace(/[_-]+/g, " ").slice(0, 80) : "";
+    $("ownText").value = ""; show("", "");
+    renderOwn();
+    $("ownStep").scrollIntoView({ block: "start" });
+  } catch (e) { err.textContent = e.message; err.hidden = false; }
+}
+async function loadOwnFile(file) {
+  const err = $("ownError"); err.hidden = true;
+  if (!file) return;
+  if (file.size > OWN_MAX_BYTES) { err.textContent = `This file is ${Math.round(file.size / 1048576)} MB, more than the browser can handle here. Narrow the query in Overpass Turbo.`; err.hidden = false; return; }
+  let raw; try { raw = await file.text(); } catch { err.textContent = "The file could not be read."; err.hidden = false; return; }
+  loadOwn(raw, text(file.name, 80) || "your file");
+}
+$("ownFile").onchange = e => { loadOwnFile(e.target.files[0]); e.target.value = ""; };
+$("ownUse").onclick = () => loadOwn($("ownText").value, "pasted text");
+$("ownRemove").onclick = () => { own = null; renderOwn(); renderScope(); renderPicked(); };
+$("ownLabel").oninput = suggestName;
+{ const d = $("ownDrop");
+  d.ondragover = e => { e.preventDefault(); d.classList.add("over"); };
+  d.ondragleave = () => d.classList.remove("over");
+  d.ondrop = e => { e.preventDefault(); d.classList.remove("over"); loadOwnFile(e.dataTransfer?.files?.[0]); }; }
+const ownLabel = () => $("ownLabel").value.trim().slice(0, 80) || "My places";
+
+/* ---------- shareable links ----------
+   The settings travel in the query part of the address ("?k=…"). Links with the settings after "#" (older
+   links) still work, but some web hosts check new visitors with a redirect that loses everything after "#",
+   while the query part survives it. The API key is never included. Everything read from a link is checked
+   before use, and unknown parameters (such as a host's own "i=1") are ignored. */
+function shareLink() {
+  const q = new URLSearchParams(), s = scope();
+  if (kind) q.set("k", kind.tag);
+  const n = $("nameHas").value.trim(); if (n) q.set("n", n);
+  q.set("s", s);
+  if (s === "pick" && selected.size) q.set("c", [...selected].join("-"));
+  q.set("d", $("maxDist").value);
+  if (+$("minDist").value > 0) q.set("m", $("minDist").value);
+  q.set("t", $("target").value);
+  if (!$("official").checked) q.set("o", "0");
+  if ($("tags").checked) q.set("g", "1");
+  if (!$("tagCountry").checked) q.set("gc", "0");
+  if ($("tagName").checked) q.set("gn", "1");
+  if ($("tagRoad").checked) q.set("gr", "1");
+  const mn = $("mapName").value.trim(); if (mn) q.set("name", mn);
+  return location.href.split(/[?#]/)[0] + "?" + q.toString();
+}
+const LINK_KEYS = ["k", "n", "s", "c", "d", "t"];
+function linkParams() {
+  for (const part of [location.hash.slice(1), location.search.slice(1)]) {
+    if (!part || !part.includes("=")) continue;
+    let q; try { q = new URLSearchParams(part); } catch { continue; }
+    if (LINK_KEYS.some(x => q.has(x))) return q;
+  }
+  return null;
+}
+function applyLink() {
+  const q = linkParams();
+  if (!q) return false;
+  const num = (key, lo, hi, id) => { const v = Math.round(Number(q.get(key))); if (q.has(key) && Number.isFinite(v)) $(id).value = Math.min(hi, Math.max(lo, v)); };
+  const k = text(q.get("k"), 300).trim();
+  kind = null; kindEl.value = "";
+  if (k) { try { parseTags(k); const name = catName(k); kind = { label: name || k, tag: k, raw: !name }; kindEl.value = name || k; } catch {} }
+  $("nameHas").value = text(q.get("n"), 200);
+  const s = q.get("s");
+  if (["cov", "pick", "world"].includes(s)) document.querySelector(`input[name=scope][value=${s}]`).checked = true;
+  if (q.has("c")) { selected.clear(); for (const c of text(q.get("c"), 1200).split(/[-,]/)) if (CODES.includes(c)) selected.add(c); }
+  num("d", 5, 2000, "maxDist"); num("m", 0, 1000, "minDist"); num("t", 1, 100000, "target");
+  if (!q.has("m")) $("minDist").value = 0;
+  $("official").checked = q.get("o") !== "0";
+  $("tags").checked = q.get("g") === "1";
+  $("tagCountry").checked = q.get("gc") !== "0";
+  $("tagName").checked = q.get("gn") === "1";
+  $("tagRoad").checked = q.get("gr") === "1";
+  $("mapName").value = text(q.get("name"), 100);
+  return true;
+}
+$("share").onclick = async () => {
+  const b = $("share");
+  if (own) return;
+  if (!kind && !nameWords().length) return show("error", "Choose a kind of place or enter a name in step 1 first. Then the link has something to share.");
+  const url = shareLink();
+  try { history.replaceState(null, "", url); } catch {}
+  try { await navigator.clipboard.writeText(url); b.textContent = "Link copied"; }
+  catch { b.textContent = "The link is in the address bar"; }
+  setTimeout(() => b.textContent = "Copy a link to this search", 2500);
+};
+const fromLink = applyLink();
+let formTouched = false;
+$("form").addEventListener("input", () => { formTouched = true; });
+$("form").addEventListener("change", e => { if (e.isTrusted) formTouched = true; });
+/* Apply the shared link again. Browsers can restore earlier form values while the page loads, and the
+   first-visit welcome sits on top of the page; this makes sure the link's settings are what the visitor sees. */
+function reapplyLink() {
+  if (!fromLink || formTouched || running || own) return;
+  if (applyLink()) { renderCountries(); renderPicked(); linkNote(); }
+}
+window.addEventListener("load", () => setTimeout(reapplyLink, 0));
+window.addEventListener("pageshow", e => { if (e.persisted) reapplyLink(); });
+window.addEventListener("hashchange", () => { if (!running && applyLink()) { renderCountries(); renderPicked(); linkNote(); } });
+function linkNote() {
+  const e = $("empty"); e.textContent = "";
+  const t = document.createElement("strong"); t.textContent = "Search loaded from a shared link";
+  e.append(t, "Check the settings on the left, then select \"Find locations\".");
+  show("note", "These settings come from a shared link. Select \"Find locations\" to run the search. Results are a random selection, so yours will differ from the sender's.");
+}
+
+renderCountries(); renderPicked();
+
+/* ---------- map ---------- */
+let map, layer, dots, canvas;
+function initMap() {
+  if (!window.L || map) return;
+  canvas = L.canvas({ padding: 0.3, tolerance: 6 });
+  map = L.map("map", { worldCopyJump: true, preferCanvas: true }).setView([25, 10], 2);
+  L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
+    maxZoom: 19, attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+  }).addTo(map);
+  dots = L.layerGroup().addTo(map);
+  layer = L.layerGroup().addTo(map);
+}
+window.addEventListener("load", initMap);
+const gmaps = p => `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(p.lat + "," + p.lng)}`;
+const osmLink = p => `https://www.openstreetmap.org/${encodeURIComponent(p.type)}/${encodeURIComponent(p.id)}`;
+function drawCandidates(places) {
+  if (!map) return;
+  for (const p of places.slice(0, MAX_DOTS))
+    p.dot = L.circleMarker([p.lat, p.lng], { radius: 2.5, weight: 0, fillColor: "#14213d", fillOpacity: .35, renderer: canvas })
+      .bindPopup(() => placePopup(p)).addTo(dots);
+  map.fitBounds(L.latLngBounds(places.slice(0, 2000).map(p => [p.lat, p.lng])).pad(0.05), { maxZoom: 12 });
+}
+/* Popup for a place that has no location on the map (not checked yet, or left out). */
+function placePopup(p) {
+  const m = p.miss;
+  const near = m && m.panoId ? `<a href="https://www.google.com/maps/@?api=1&map_action=pano&pano=${encodeURIComponent(m.panoId)}&heading=${m.heading.toFixed(0)}" target="_blank" rel="noopener">Open the nearest Street View</a>` : "";
+  return `<div class="pop"><b>${esc(p.name || "Unnamed place")}</b>${esc(m ? m.why : "Not checked yet.")}
+    <a href="${gmaps(p)}" target="_blank" rel="noopener">Open in Google Maps</a>${near}
+    <a href="${osmLink(p)}" target="_blank" rel="noopener">See the place on OpenStreetMap</a></div>`;
+}
+function markMissed(p, why, r, d) {
+  p.miss = { why, panoId: r && r.panoId, heading: r && r.panoId ? bearing(r.lat, r.lng, p.lat, p.lng) : 0 };
+  p.dot?.setStyle({ radius: 3.5, fillColor: "#8a5a66", fillOpacity: .8 });
+}
+const roadLine = loc => loc.road === "has" ? `<br>Road name shown: ${esc(loc.roadName)}` : loc.road === "none" ? "<br>No road name shown" : "";
+const svLink = loc => `https://www.google.com/maps/@?api=1&map_action=pano&pano=${encodeURIComponent(loc.panoId)}&heading=${loc.heading.toFixed(0)}`;
+function drawLocation(loc) {
+  if (!map) return;
+  const line = L.polyline([[loc.lat, loc.lng], [loc.poi.lat, loc.poi.lng]], { color: "#f2a900", weight: 3, renderer: canvas, interactive: false }).addTo(layer);
+  const dot = L.circleMarker([loc.poi.lat, loc.poi.lng], { radius: 3, color: "#1d5fd1", weight: 0, fillOpacity: 1, renderer: canvas, interactive: false }).addTo(layer);
+  const sv = svLink(loc);
+  const marker = L.circleMarker([loc.lat, loc.lng], { radius: 6, color: "#f2a900", weight: 2.5, fillColor: "#14213d", fillOpacity: 1, renderer: canvas })
+    .bindPopup(() => `<div class="pop"><b>${esc(loc.poi.name || "Unnamed place")}</b>${Math.round(loc.dist)} m away${loc.date ? ", photo from " + esc(loc.date) : ""}${roadLine(loc)}
+      <a class="sv" href="${sv}" target="_blank" rel="noopener">Open in Street View</a>
+      <a href="${gmaps(loc.poi)}" target="_blank" rel="noopener">Open in Google Maps</a>
+      <a href="${osmLink(loc.poi)}" target="_blank" rel="noopener">See the place on OpenStreetMap</a>
+      <button type="button" class="rm">Remove from map</button></div>`)
+    .on("popupopen", e => { const b = e.popup.getElement()?.querySelector(".rm"); if (b) b.onclick = () => removeLocation(loc); })
+    .addTo(layer);
+  loc.layers = [line, dot, marker];
+}
+/* Taking a location out of the map and the export, with undo. */
+let removed = [];
+function removeLocation(loc) {
+  const i = results.indexOf(loc);
+  if (i < 0) return;
+  results.splice(i, 1); removed.push(loc);
+  map?.closePopup(); (loc.layers || []).forEach(l => layer.removeLayer(l));
+  paint();
+}
+function undoRemove() {
+  const loc = removed.pop();
+  if (!loc) return;
+  results.push(loc); drawLocation(loc); paint();
+}
+
+/* ---------- list of named locations ---------- */
+const NAMES_MAX = 400;       // rows drawn at once; the filter narrows the rest
+let namesOpenPano = "", namesSig = "";
+const el = (tag, props = {}, ...kids) => { const n = Object.assign(document.createElement(tag), props); n.append(...kids); return n; };
+const link = (href, label, cls = "") => el("a", { href, target: "_blank", rel: "noopener", className: cls }, label);
+function showOnMap(loc) {
+  const m = loc.layers && loc.layers[2];
+  if (!map || !m) return;
+  if (matchMedia("(max-width:860px)").matches) toggleNames(false);
+  map.setView(m.getLatLng(), Math.max(map.getZoom(), 16), { animate: false }); m.openPopup();
+}
+function renderNames(force) {
+  const named = results.filter(l => l.poi.name), unnamed = results.length - named.length;
+  $("namesOpen").disabled = !named.length && $("names").hidden;
+  $("namesOpen").textContent = named.length ? `List by name (${fmt(named.length)})` : "List by name";
+  if ($("names").hidden) return;
+  const q = norm($("namesFilter").value.trim());
+  const sig = [results.length, removed.length, q, namesOpenPano].join("|");
+  if (!force && sig === namesSig) return;
+  namesSig = sig;
+  const rows = named.map(l => ({ l, c: l.poi.cc ? countryName(l.poi.cc) : "" }))
+    .filter(r => !q || norm(r.l.poi.name).includes(q) || norm(r.c).includes(q))
+    .sort((a, b) => a.l.poi.name.localeCompare(b.l.poi.name) || a.c.localeCompare(b.c));
+  const list = $("namesList"); list.textContent = "";
+  for (const { l, c } of rows.slice(0, NAMES_MAX)) {
+    const open = l.panoId === namesOpenPano;
+    const row = el("button", { type: "button", className: "row" }, el("span", {}, l.poi.name), el("small", {}, c));
+    row.setAttribute("aria-expanded", String(open));
+    row.onclick = () => { namesOpenPano = open ? "" : l.panoId; renderNames(true); };
+    const li = el("li", {}, row);
+    if (open) {
+      const rm = el("button", { type: "button", className: "rm" }, "Remove from map");
+      rm.onclick = () => { namesOpenPano = ""; removeLocation(l); };
+      const show = el("button", { type: "button", className: "btn" }, "Show on map");
+      show.onclick = () => showOnMap(l);
+      li.append(el("div", { className: "detail" },
+        `${Math.round(l.dist)} m away${l.date ? ", photo from " + l.date : ""}${l.road === "has" ? `. Road name shown: ${l.roadName}` : l.road === "none" ? ". No road name shown" : ""}`,
+        link(svLink(l), "Open in Street View", "svbtn"),
+        link(gmaps(l.poi), "Open in Google Maps"),
+        link(osmLink(l.poi), "See the place on OpenStreetMap"),
+        el("div", { className: "acts" }, show, rm)));
+    }
+    list.append(li);
+  }
+  if (force && namesOpenPano) list.querySelector('.row[aria-expanded="true"]')?.scrollIntoView({ block: "nearest" });
+  $("namesTitle").textContent = q ? `${fmt(rows.length)} of ${fmt(named.length)} named locations` : `${fmt(named.length)} named ${named.length === 1 ? "location" : "locations"}`;
+  const notes = [];
+  if (!rows.length) notes.push(named.length ? "No name matches the filter." : "No named locations yet.");
+  if (rows.length > NAMES_MAX) notes.push(`Showing the first ${fmt(NAMES_MAX)}. Type in the filter to narrow the list.`);
+  if (unnamed) notes.push(`${fmt(unnamed)} ${unnamed === 1 ? "location has" : "locations have"} no name and ${unnamed === 1 ? "is" : "are"} not listed.`);
+  $("namesNote").textContent = notes.join(" ");
+}
+function toggleNames(on) {
+  $("names").hidden = !on; $("stage").classList.toggle("listing", on);
+  $("namesOpen").setAttribute("aria-expanded", String(on));
+  if (on) { renderNames(true); $("namesFilter").focus(); } else renderNames();
+}
+$("namesOpen").onclick = () => toggleNames($("names").hidden);
+$("namesClose").onclick = () => toggleNames(false);
+$("namesFilter").oninput = () => renderNames();
+
+/* ---------- OpenStreetMap ---------- */
+/* A failed search step, with a cause the page can explain. kind: timeout, memory, rate, busy,
+   network, syntax, format or server (OpenStreetMap); key, google or internal (everything else). */
+class SearchError extends Error {
+  constructor(kind, detail) { super(kind); this.kind = kind; this.detail = detail || ""; }
+}
+const plain = html => String(html).replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
+function serverGroups(first) {
+  const pub = OVERPASS.map((_, n) => { const url = OVERPASS[(first + n) % OVERPASS.length]; return { url, host: hostOf(url) }; });
+  if (!osmOwn) return [pub];
+  const mine = [{ url: osmOwn.url, host: `your own server (${hostOf(osmOwn.url)})`, own: true }];
+  return osmOwn.mode === "fallback" ? [pub, mine] : [mine, pub];
+}
+/* Ask one group of servers in turn. Returns the elements, or throws a SearchError saying why none answered. */
+async function overpassGroup(servers, query, signal, waitSeconds) {
+  const tried = [];
+  for (const { url, host, own: mine } of servers) {
+    const t0 = Date.now(), secs = () => Math.round((Date.now() - t0) / 1000);
+    const ctl = new AbortController(); let gaveUp = false;
+    const stop = () => ctl.abort();
+    signal?.addEventListener("abort", stop);
+    const timer = setTimeout(() => { gaveUp = true; ctl.abort(); }, (waitSeconds + 20) * 1000);
+    try {
+      const r = await fetch(url, { method: "POST", body: "data=" + encodeURIComponent(query), signal: ctl.signal,
+        headers: { "Content-Type": "application/x-www-form-urlencoded" } });
+      if (r.status === 400) throw new SearchError("syntax", `${host} answered HTTP 400: ${text(plain(await r.text().catch(() => "")), 400)}`);
+      if (r.status === 401 || r.status === 403) { tried.push({ host, kind: mine ? "denied" : "busy", note: `HTTP ${r.status}, access refused` }); continue; }
+      if (r.status === 429) { tried.push({ host, kind: "rate", note: "HTTP 429, too many requests" }); continue; }
+      if (r.status === 504) { tried.push({ host, kind: "busy", note: `HTTP 504, gateway timeout after ${secs()} s` }); continue; }
+      if (!r.ok) { tried.push({ host, kind: "busy", note: `HTTP ${r.status} after ${secs()} s` }); continue; }
+      let j; try { j = await r.json(); } catch { tried.push({ host, kind: "format", note: "the answer was not readable data" }); continue; }
+      const remark = text(j && j.remark, 400);
+      if (/rate_limited|too many requests/i.test(remark)) { tried.push({ host, kind: "rate", note: remark }); continue; }
+      if (/timed out/i.test(remark)) throw new SearchError("timeout", `${host} after ${secs()} s: ${remark}`);
+      if (/out of memory/i.test(remark)) throw new SearchError("memory", `${host} after ${secs()} s: ${remark}`);
+      if (/error/i.test(remark)) throw new SearchError("server", `${host} after ${secs()} s: ${remark}`);
+      if (mine) osmUse.own++; else osmUse.pub++;
+      return Array.isArray(j && j.elements) ? j.elements : [];
+    } catch (e) {
+      if (e instanceof SearchError) throw e;
+      if (signal?.aborted) { const a = new Error("stopped"); a.name = "AbortError"; throw a; }
+      if (gaveUp) throw new SearchError("timeout", `${host} sent no answer within ${secs()} s`);
+      tried.push({ host, kind: "network", note: `no connection (${text(e && e.message, 80) || "request failed"})` });
+    } finally { clearTimeout(timer); signal?.removeEventListener("abort", stop); }
+  }
+  const kinds = tried.map(t => t.kind);
+  const kind = kinds.every(k => k === "network") ? "network" : kinds.includes("denied") ? "denied" : kinds.includes("rate") ? "rate" : kinds.includes("busy") ? "busy" : "format";
+  throw new SearchError(kind, tried.map(t => `${t.host}: ${t.note}`).join("\n"));
+}
+/* Ask the servers in the order the settings call for: the user's own server first, or only after the public ones failed. */
+async function overpass(query, signal, first = 0, waitSeconds = WORLD_TIMEOUT) {
+  const groups = serverGroups(first), details = [];
+  let last = null;
+  for (const g of groups) {
+    try { return await overpassGroup(g, query, signal, waitSeconds); }
+    catch (e) {
+      if (!(e instanceof SearchError)) throw e;
+      if (g[0].own) osmUse.ownTrouble = e.detail;
+      if (e.kind === "syntax") throw e;                  // the same query would be rejected again
+      last = e; details.push(e.detail);
+    }
+  }
+  last.detail = details.join("\n"); throw last;
+}
+/* Plain-language title and advice for a failed OpenStreetMap request. */
+function explainOsm(e, ctx) {
+  const narrow = !ctx.kind ? "Choose fewer or smaller countries in step 2, or add a kind of place in step 1."
+    : ctx.sc === "pick" ? "Choose fewer countries in step 2, or add words under \"Name contains\" in step 1."
+    : "Choose \"Only the countries I choose\" in step 2 and tick a few countries.";
+  switch (e.kind) {
+    case "timeout": return ["OpenStreetMap ran out of time",
+      `The search took longer than the OpenStreetMap server allows, even after splitting it into smaller parts, so nothing was returned. That happens when there are too many places to go through. ${narrow}`];
+    case "memory": return ["The search was too large for OpenStreetMap",
+      `The server stopped because the result needed more memory than it allows for one search. ${narrow}`];
+    case "rate": return ["OpenStreetMap is limiting your requests",
+      "The free OpenStreetMap servers accept only a few searches from one person in a short time, and that limit was reached. Your settings are fine. Wait a minute or two, then select \"Find locations\" again."];
+    case "busy": return ["The OpenStreetMap servers are overloaded",
+      `Every server answered that it is too busy, or gave up part-way. If this was a large search, a smaller one may get through: ${narrow.charAt(0).toLowerCase() + narrow.slice(1)} Otherwise try again in a few minutes.`];
+    case "network": return ["OpenStreetMap could not be reached",
+      `None of the servers could be contacted. Check your internet connection. Ad blockers, script blockers and company firewalls can also block these addresses.`];
+    case "denied": return ["Your own Overpass server refused the request",
+      "It answered that the address or key is not accepted, or that your quota is used up, and the public servers did not answer either. Check the server address under \"Expert\" below the button."];
+    case "syntax": return ["OpenStreetMap rejected the search",
+      "The server could not read the query. This usually comes from an unusual character in a tag or a name in step 1. The exact query is under \"Expert\" below the button."];
+    case "format": return ["OpenStreetMap sent an unreadable answer",
+      "The servers answered, but not with place data. This is a problem on their side. Try again in a few minutes."];
+    default: return ["OpenStreetMap reported an error",
+      "The server answered with an error instead of places. The technical details show its message. Try again in a few minutes."];
+  }
+}
+/* The Overpass query. codes: list of country codes, or null for the whole world.
+   grouped: results arrive per country, each group led by its country area. */
+function buildQuery(filter, codes, grouped = true, pretty = false, seconds = WORLD_TIMEOUT) {
+  const nl = pretty ? "\n" : "", ind = pretty ? "  " : "";
+  const body = (set, i) => [`node${filter}${set};`, "out body;", `(way${filter}${set};relation${filter}${set};);`, "out tags center;"].map(l => i + l).join(nl);
+  const head = `[out:json][timeout:${seconds}];`;
+  if (!codes) return head + nl + body("", "");
+  const areas = `area["ISO3166-1"~"^(${codes.join("|")})$"]->.all;`;
+  if (!grouped) return head + nl + areas + nl + body("(area.all)", "");
+  return head + nl + areas + nl + "foreach.all->.c(" + nl + ind + ".c out tags;" + nl + body("(area.c)", ind) + nl + ");";
+}
+/* Read Overpass elements into the place list. fallbackCc: country to use when the answer names none. */
+function mergeElements(els, byId, fallbackCc, stats) {
+  if (!Array.isArray(els)) return;
+  let cc = fallbackCc;
+  for (const e of els) {
+    if (!e || typeof e !== "object") continue;
+    if (e.type === "area") { const c = e.tags?.["ISO3166-1"]; cc = typeof c === "string" && /^[A-Z]{2}$/.test(c) ? c : fallbackCc; continue; }
+    if (e.type !== "node" && e.type !== "way" && e.type !== "relation") continue;
+    if (!Number.isSafeInteger(e.id) || e.id < 0) continue;
+    const lat = e.lat ?? e.center?.lat, lng = e.lon ?? e.center?.lon;
+    if (!finite(lat, -90, 90) || !finite(lng, -180, 180)) { if (stats) stats.noPosition++; continue; }
+    const id = e.type + e.id, had = byId.get(id);
+    if (had && !(PARENTS.has(had.cc) && cc && !PARENTS.has(cc))) continue;   // keep the more specific territory
+    byId.set(id, { id: e.id, type: e.type, lat, lng, cc, name: text(e.tags?.["name:en"]) || text(e.tags?.name) });
+  }
+}
+/* ---------- your own Overpass result ---------- */
+const OWN_MAX_BYTES = 300 * 1024 * 1024, OWN_MANY = 200000;
+/* Turn the text of a "raw OSM data" JSON export into places. Throws a readable message for anything else. */
+function parseOwn(raw) {
+  const t = String(raw).trim();
+  const how = ' In Overpass Turbo choose Export, then Data, then "raw OSM data", from a query that starts with [out:json].';
+  if (!t) throw new Error("There is nothing to read. Choose a file or paste the raw OSM data first.");
+  if (t[0] === "<") throw new Error("This is XML, not JSON. Add [out:json] as the first line of the query, run it again and export once more." + how);
+  let j;
+  try { j = JSON.parse(t); } catch { throw new Error("This is not valid JSON. It may be cut off, or a different export format." + how); }
+  if (j && (j.type === "FeatureCollection" || j.type === "Feature" || Array.isArray(j.features))) throw new Error("This is GeoJSON. Only raw OSM data is accepted." + how);
+  if (j && Array.isArray(j.customCoordinates)) throw new Error("This is a map-making.app file, not an Overpass result." + how);
+  if (!j || !Array.isArray(j.elements)) throw new Error('This JSON has no "elements" list, so it is not raw OSM data.' + how);
+  if (!j.elements.length) throw new Error(`The result is empty${j.remark ? ": " + text(j.remark, 200) : ""}. Check the query in Overpass Turbo.`);
+
+  // Positions of plain nodes, and which nodes only exist as corner points of outlines.
+  const at = new Map(), corner = new Set();
+  for (const e of j.elements) {
+    if (!e || typeof e !== "object") continue;
+    if (e.type === "node" && finite(e.lat, -90, 90) && finite(e.lon, -180, 180)) at.set(e.id, e);
+    if (e.type === "way" && Array.isArray(e.nodes)) for (const n of e.nodes) corner.add(n);
+    if (e.type === "relation" && Array.isArray(e.members)) for (const m of e.members) if (m && m.type === "node") corner.add(m.ref);
+  }
+  const middle = pts => {
+    let a = 90, b = -90, c = 180, d = -180, n = 0;
+    for (const q of pts) if (q && finite(q.lat, -90, 90) && finite(q.lon, -180, 180)) { a = Math.min(a, q.lat); b = Math.max(b, q.lat); c = Math.min(c, q.lon); d = Math.max(d, q.lon); n++; }
+    return n ? { lat: (a + b) / 2, lon: (c + d) / 2 } : null;
+  };
+  const els = []; let lines = 0, worked = 0;
+  for (let e of j.elements) {
+    if (!e || typeof e !== "object") continue;
+    if (e.type === "node" && !e.tags && corner.has(e.id)) continue;                    // corner point of an outline, not a place
+    if ((e.type === "way" || e.type === "relation") && !e.center) {
+      const bb = e.bounds;
+      let c = bb && finite(bb.minlat, -90, 90) && finite(bb.maxlat, -90, 90) && finite(bb.minlon, -180, 180) && finite(bb.maxlon, -180, 180)
+        ? { lat: (bb.minlat + bb.maxlat) / 2, lon: (bb.minlon + bb.maxlon) / 2 } : null;
+      if (!c && Array.isArray(e.geometry)) c = middle(e.geometry);
+      if (!c && Array.isArray(e.nodes)) c = middle(e.nodes.map(n => at.get(n)));
+      if (!c && Array.isArray(e.members)) c = middle(e.members.flatMap(m => !m ? [] : Array.isArray(m.geometry) ? m.geometry : m.type === "node" ? [finite(m.lat, -90, 90) ? m : at.get(m.ref)] : []));
+      if (c) { e = { ...e, center: c }; worked++; }
+    }
+    if (e.type === "way") {
+      const ring = Array.isArray(e.nodes) ? e.nodes : Array.isArray(e.geometry) ? e.geometry.map(g => g && g.lat + "," + g.lon) : null;
+      if (ring && ring.length > 1 && ring[0] !== ring[ring.length - 1]) lines++;
+    }
+    els.push(e);
+  }
+  const byId = new Map(), stats = { noPosition: 0 };
+  mergeElements(els, byId, undefined, stats);
+  const places = [...byId.values()];
+  if (!places.length) throw new Error(stats.noPosition
+    ? `None of the ${fmt(stats.noPosition)} objects in this result has a position. End the query with "out center;" and export again.`
+    : "This result contains no nodes, ways or relations to use as places.");
+  return { places, noPosition: stats.noPosition, lines, worked, hasCc: places.some(p => p.cc), countries: new Set(places.map(p => p.cc).filter(Boolean)).size };
+}
+
+/* Countries grouped into parts of similar cost, the cheapest parts first. */
+function makeParts(codes) {
+  const bins = [];
+  for (const c of [...codes].sort((x, y) => cw(y) - cw(x))) {
+    let bin = bins.find(b => b.w + cw(c) <= PART_WEIGHT);
+    if (!bin) { bin = { codes: [], w: 0, top: 0 }; bins.push(bin); }
+    bin.codes.push(c); bin.w += cw(c); bin.top = Math.max(bin.top, cw(c));
+  }
+  return bins.sort((x, y) => x.top - y.top || x.w - y.w).map(b => b.codes);
+}
+function halve(codes) {
+  const a = [], b = []; let wa = 0, wb = 0;
+  for (const c of [...codes].sort((x, y) => cw(y) - cw(x))) { if (wa <= wb) { a.push(c); wa += cw(c); } else { b.push(c); wb += cw(c); } }
+  return [a, b];
+}
+const pause = (ms, signal) => new Promise((resolve, reject) => {
+  const t = setTimeout(done, ms);
+  function done() { signal?.removeEventListener("abort", stop); resolve(); }
+  function stop() { clearTimeout(t); const e = new Error("stopped"); e.name = "AbortError"; reject(e); }
+  if (signal?.aborted) stop(); else signal?.addEventListener("abort", stop);
+});
+/* Fetch the places. codes: list of country codes, or null for the whole world.
+   Countries are requested a few at a time. A part that is too big for the server is split in two and
+   tried again; a single country that still fails is skipped. Returns { places, skipped }. */
+async function fetchPlaces(filter, codes, signal, onProgress = () => {}) {
+  const byId = new Map();
+  if (!codes) { mergeElements(await overpass(buildQuery(filter, null), signal), byId); return { places: [...byId.values()], skipped: [] }; }
+
+  const queue = makeParts(codes), total = weigh(codes), skipped = [], failures = [];
+  const inner = new AbortController(), stopInner = () => inner.abort();
+  signal?.addEventListener("abort", stopInner);
+  let grouped = true, active = 0, done = 0, okParts = 0, sent = 0, waiting = false;
+  const report = () => onProgress({ fraction: done / total, places: byId.size, skipped: skipped.length, waiting });
+
+  const request = async part => {
+    for (let attempt = 0; ; attempt++) {
+      const asked = grouped;
+      try { return await overpass(buildQuery(filter, part, asked, false, PART_TIMEOUT), inner.signal, sent++, PART_TIMEOUT); }
+      catch (e) {
+        if (e.kind === "syntax" && asked) { grouped = false; continue; }            // older server: ask without country grouping
+        if (e.kind === "rate" && attempt < 3) { waiting = true; report(); await pause(RATE_WAIT, inner.signal); waiting = false; report(); continue; }
+        throw e;
+      }
+    }
+  };
+  const runPart = async part => {
+    let els;
+    try { els = await request(part); }
+    catch (e) {
+      if (!["timeout", "memory", "busy"].includes(e.kind)) throw e;
+      failures.push(`${part.length === 1 ? countryName(part[0]) : part.length + " countries"}: ${e.detail}`);
+      // Nothing has worked and even the cheapest parts fail: this search is too heavy, stop instead of grinding on.
+      if (!okParts && failures.length >= 3) throw new SearchError(e.kind, failures.join("\n"));
+      if (part.length > 1) { queue.unshift(...halve(part)); return; }
+      skipped.push(part[0]); done += cw(part[0]); report(); return;
+    }
+    mergeElements(els, byId, part.length === 1 ? part[0] : undefined);
+    okParts++; done += weigh(part); report();
+  };
+  const worker = async () => {
+    for (;;) {
+      const part = queue.shift();
+      if (!part) { if (!active) return; await pause(150, inner.signal); continue; }
+      active++;
+      try { await runPart(part); } finally { active--; }
+    }
+  };
+  try { report(); await Promise.all(Array.from({ length: OSM_PARALLEL }, worker)); }
+  catch (e) { inner.abort(); throw e; }
+  finally { signal?.removeEventListener("abort", stopInner); }
+  if (!okParts && skipped.length) throw new SearchError("timeout", failures.join("\n"));
+  return { places: [...byId.values()], skipped };
+}
+
+/* ---------- Google Street View ---------- */
+// Preferred: the free metadata web service. If the browser cannot reach it, fall back to Google's script.
+let restWorked = false, jsService = null;
+/* Keep only well-formed values from a Street View answer. */
+function cleanPano(r) {
+  const status = text(r.status, 40) || "NO_STATUS";
+  if (status !== "OK") return { status, detail: text(r.detail, 300) };
+  if (!finite(r.lat, -90, 90) || !finite(r.lng, -180, 180)) return { status: "MALFORMED", detail: "the answer had no usable position" };
+  if (typeof r.panoId !== "string" || !/^[^\s<>"'`\\]{4,300}$/.test(r.panoId)) return { status: "MALFORMED", detail: `the panorama ID had an unexpected form (${text(String(r.panoId), 40)})` };
+  const date = text(r.date, 10);
+  return { status, lat: r.lat, lng: r.lng, panoId: r.panoId, copyright: text(r.copyright), date: /^\d{4}(-\d{2})?$/.test(date) ? date : "" };
+}
+async function lookupRest(p, radius, key, signal) {
+  const u = `https://maps.googleapis.com/maps/api/streetview/metadata?location=${p.lat},${p.lng}&radius=${radius}&source=outdoor&key=${encodeURIComponent(key)}`;
+  const r = await fetch(u, { signal });
+  const j = await r.json();
+  restWorked = true;
+  return cleanPano({ status: j.status, lat: j.location?.lat, lng: j.location?.lng, panoId: j.pano_id, copyright: j.copyright, date: j.date, detail: j.error_message });
+}
+let scriptPrimary = false, scriptBroken = false;
+function loadGoogleScript(key) {
+  return jsService ??= new Promise((resolve, reject) => {
+    const giveUp = setTimeout(() => { scriptBroken = true; reject(new Error("unreachable")); }, 12000);   // loaded nothing usable
+    window.gm_authFailure = () => { scriptBroken = true; reject(new Error("denied")); };
+    window.__lookoutReady = () => google.maps.importLibrary("streetView").then(lib => { clearTimeout(giveUp); resolve(new lib.StreetViewService()); }, reject);
+    const s = document.createElement("script");
+    s.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(key)}&v=weekly&loading=async&callback=__lookoutReady`;
+    s.onerror = () => { scriptBroken = true; reject(new Error("unreachable")); };
+    document.head.append(s);
+  });
+}
+/* sources: "outdoor" for any outdoor panorama; "google" limits the search to official Google coverage. */
+async function lookupScript(p, radius, key, sources = ["outdoor"]) {
+  const sv = await loadGoogleScript(key);
+  return new Promise(resolve => {
+    setTimeout(() => resolve({ status: "NETWORK" }), 15000);     // never wait forever for the script to answer
+    sv.getPanorama({ location: { lat: p.lat, lng: p.lng }, radius, sources, preference: "nearest" }, (d, status) => {
+      if (status !== "OK" || !d?.location) return resolve({ status: text(status, 40) || "NO_STATUS" });
+      resolve(cleanPano({ status: "OK", lat: d.location.latLng?.lat(), lng: d.location.latLng?.lng(), panoId: d.location.pano, copyright: d.copyright, date: d.imageDate }));
+    });
+  });
+}
+async function lookup(p, radius, key, signal, officialOnly) {
+  if (!scriptPrimary) {
+    try { return await lookupRest(p, radius, key, signal); }
+    catch (e) { if (e.name === "AbortError") throw e; if (restWorked) return { status: "NETWORK" }; scriptPrimary = true; }
+  }
+  return lookupScript(p, radius, key, officialOnly ? ["google", "outdoor"] : ["outdoor"]);
+}
+/* A second look for official coverage, used when the nearest panorama was uploaded by someone else.
+   First choice: Google's script, which can search official coverage only. If the script cannot be used
+   with this key, probe six points around the place with the ordinary lookup and keep the closest official answer. */
+let officialVia = "";
+function offsetPoint(p, metres, bearingDeg) {
+  const t = rad(bearingDeg);
+  return { lat: p.lat + metres * Math.cos(t) / 111320, lng: p.lng + metres * Math.sin(t) / (111320 * Math.max(0.01, Math.cos(rad(p.lat)))) };
+}
+async function officialNearby(p, maxDist, key, signal) {
+  if (!scriptBroken) {
+    try {
+      const r = await lookupScript(p, Math.ceil(maxDist), key, ["google", "outdoor"]);
+      if (!scriptBroken && (r.status === "OK" || r.status === "ZERO_RESULTS")) { officialVia = "script"; return r; }
+    } catch { scriptBroken = true; }                     // the script cannot be used with this key or connection
+  }
+  if (scriptPrimary) return { status: "ZERO_RESULTS" };
+  officialVia = "ring";
+  const answers = await Promise.all([0, 60, 120, 180, 240, 300].map(b =>
+    lookupRest(offsetPoint(p, maxDist * 0.55, b), Math.ceil(maxDist * 0.6), key, signal).catch(e => { if (e.name === "AbortError") throw e; return { status: "NETWORK" }; })));
+  let best = null;
+  for (const a of answers) {
+    if (a.status !== "OK" || !isOfficial(a.copyright)) continue;
+    const d = distance(a.lat, a.lng, p.lat, p.lng);
+    if (!best || d < best.d) best = { ...a, d };
+  }
+  return best || { status: "ZERO_RESULTS" };
+}
+/* Does Street View show a street name at this panorama? The names are the labels of the links to the
+   neighbouring panoramas, which only Google's script returns. state: "has", "none" or "unknown". */
+async function roadInfo(panoId, key) {
+  if (scriptBroken) return { state: "unknown" };
+  let sv;
+  try { sv = await loadGoogleScript(key); } catch { scriptBroken = true; return { state: "unknown" }; }
+  return new Promise(resolve => {
+    const t = setTimeout(() => resolve({ state: "unknown" }), 15000);
+    sv.getPanorama({ pano: panoId }, (d, status) => {
+      clearTimeout(t);
+      if (status !== "OK" || !d || scriptBroken) return resolve({ state: "unknown" });
+      const names = (Array.isArray(d.links) ? d.links : []).map(l => text(l && l.description, 120).trim()).filter(Boolean);
+      resolve(names.length ? { state: "has", name: names[0] } : { state: "none" });
+    });
+  });
+}
+/* Why a lookup failed, in plain words. */
+const RETRY = new Set(["OVER_QUERY_LIMIT", "UNKNOWN_ERROR", "NETWORK"]);
+function failReason(r) {
+  switch (r.status) {
+    case "OVER_QUERY_LIMIT": return { key: "limit", short: "Google's request limit", text: "Google's request limit was reached: too many requests per minute, or the daily quota set on the API key." };
+    case "UNKNOWN_ERROR": return { key: "temporary", short: "a temporary error at Google", text: "Google reported a temporary error on its side." };
+    case "NETWORK": return { key: "network", short: "a connection problem", text: "The request did not reach Google. That points to a connection problem or a blocker in the browser." };
+    case "MALFORMED": return { key: "malformed", short: "an unexpected answer from Google", text: `Google's answer could not be used: ${r.detail || "it had an unexpected form"}.` };
+    case "INVALID_REQUEST": return { key: "invalid", short: "a request Google called invalid", text: "Google said the request was invalid." };
+    default: return { key: "other", short: `the answer "${text(r.status, 40)}"`, text: `Google answered "${text(r.status, 40)}".` };
+  }
+}
+const isOfficial = c => c.replace(/[©\d\s]/g, "").replace(/LLC|Inc\.?/gi, "").replace(/[,.]/g, "") === "Google";
+
+/* ---------- run ---------- */
+let results = [], running = false, abort = null, lastName = "", ticker = 0;
+/* The places from the last successful OpenStreetMap search, kept so Street View can be checked again
+   with other settings: { places, skipped, label, name, where } */
+let lastFetch = null;
+function renderAgain() {
+  const on = !!lastFetch && !own;
+  $("againBox").hidden = !on; $("again").disabled = running;
+  if (on) $("againHint").textContent = `Uses the ${fmt(lastFetch.places.length)} ${lastFetch.places.length === 1 ? "place" : "places"} already found for "${lastFetch.label}" (${lastFetch.where}) with the settings in step 3. OpenStreetMap is not asked again.`;
+}
+const stats = () => ({ places: 0, checked: 0, none: 0, far: 0, close: 0, unofficial: 0, dup: 0, failed: 0, failWhy: {}, rescued: 0, road: { has: 0, none: 0, unknown: 0 }, skipped: 0, progress: 0 });
+let S = stats();
+
+function show(type, text) { const m = $("message"); m.hidden = !text; m.className = "msg " + type; m.textContent = text || ""; if (!text) $("fail").hidden = true; }
+/* A search that stopped with an error: explained on the map and next to the button. */
+function fail(title, text, detail, canRetry) {
+  $("failRetry").hidden = !canRetry;
+  const m = $("message"); m.hidden = false; m.className = "msg error"; m.textContent = "";
+  const b = document.createElement("b"); b.textContent = title; m.append(b, text);
+  $("failTitle").textContent = title; $("failText").textContent = text;
+  $("failMore").hidden = !detail; $("failMore").open = false; $("failDetail").textContent = detail || "";
+  $("fail").hidden = false; $("empty").hidden = true;
+}
+$("failClose").onclick = () => { $("fail").hidden = true; paint(); };
+$("failRetry").onclick = () => { if (!running) startSearch(null); };
+function paint(now) {
+  if (now) $("now").textContent = now;
+  $("count").textContent = fmt(results.length);
+  $("fill").style.width = Math.min(100, 100 * S.progress) + "%";
+  const t = [];
+  if (S.places) t.push(`<span><b>${fmt(S.places)}</b> places on OpenStreetMap</span>`, `<span><b>${fmt(S.checked)}</b> checked</span>`);
+  if (S.none) t.push(`<span><b>${fmt(S.none)}</b> without Street View nearby</span>`);
+  if (S.far + S.close) t.push(`<span><b>${fmt(S.far + S.close)}</b> outside your distance</span>`);
+  if (S.unofficial) t.push(`<span><b>${fmt(S.unofficial)}</b> not official coverage</span>`);
+  if (S.dup) t.push(`<span><b>${fmt(S.dup)}</b> duplicates</span>`);
+  if (S.road.has + S.road.none) t.push(`<span><b>${fmt(S.road.has)}</b> with a road name, <b>${fmt(S.road.none)}</b> without</span>`);
+  if (S.rescued) t.push(`<span><b>${fmt(S.rescued)}</b> found by a second, official-only look</span>`);
+  if (S.failed) t.push(`<span><b>${fmt(S.failed)}</b> lookups failed</span>`);
+  if (S.skipped) t.push(`<span><b>${fmt(S.skipped)}</b> ${S.skipped === 1 ? "country" : "countries"} left out</span>`);
+  if (removed.length) t.push(`<span><b>${fmt(removed.length)}</b> removed by you <button type="button" class="undo" id="undo">Undo</button></span>`);
+  if (!running && map && S.checked > results.length + removed.length) t.push(`<span class="key"><i></i>Select a muted dot to see why a place was left out, with a Google Maps link.</span>`);
+  $("tally").innerHTML = t.join("");
+  $("download").disabled = $("copy").disabled = !results.length;
+  renderNames();
+  $("empty").hidden = results.length > 0 || running || !$("fail").hidden;
+}
+/* phase: 1 = asking OpenStreetMap, 2 = checking Street View, 0 = idle */
+let phaseSub = "";
+function setPhase(phase, title, sub) {
+  clearInterval(ticker);
+  $("track").classList.remove("osm");
+  running = phase > 0;
+  $("fields").disabled = running; renderAgain();
+  $("go").innerHTML = running ? `<span class="spin"></span>Stop` : "Find locations";
+  $("go").classList.toggle("stop", running);
+  $("track").classList.toggle("busy", phase === 1);
+  $("live").hidden = !running;
+  $("live").classList.toggle("corner", phase === 2);
+  $("st1").className = phase === 1 ? "on" : "done";
+  $("st2").className = phase === 2 ? "on" : "";
+  if (!running) return;
+  $("liveTitle").textContent = title;
+  if (phase === 1) {
+    const t0 = Date.now();
+    phaseSub = sub;
+    const tick = () => { const s = Math.round((Date.now() - t0) / 1000); $("liveSub").textContent = `${phaseSub} ${s} s so far.`; };
+    tick(); ticker = setInterval(tick, 1000);
+  } else $("liveSub").textContent = sub;
+}
+
+$("form").onsubmit = ev => { ev.preventDefault(); if (running) abort?.abort(); else startSearch(null); };
+$("again").onclick = () => { if (!running && lastFetch && !own) startSearch(lastFetch); };
+/* reuse: the kept result of an earlier OpenStreetMap search, to check Street View on it again. */
+async function startSearch(reuse) {
+  if (running) return;
+  show("", "");
+  // Places that are already there: an earlier search result, or the user's own Overpass result.
+  const ownRun = reuse || (own ? { places: own.places, skipped: [], label: ownLabel(), name: ownLabel() } : null);
+  let words = [];
+  if (!ownRun) {
+    if (!kind) {                                   // typed but not picked: accept an exact catalogue name
+      const hit = searchCatalogue(kindEl.value, 1)[0];
+      if (hit && norm(hit.label) === norm(kindEl.value.trim())) choose(hit);
+    }
+    words = nameWords();
+    if (!kind && kindEl.value.trim()) return show("error", "Pick one of the suggestions in step 1, or write a tag as key=value.");
+    if (!kind && !words.length) return show("error", "Choose a kind of place or enter a name in step 1.");
+  }
+  const key = GOOGLE_API_KEY || $("apiKey").value.trim();
+  const maxDist = Math.max(5, +$("maxDist").value || 25);
+  const minDist = Math.max(0, +$("minDist").value || 0);
+  const target = Math.max(1, Math.floor(+$("target").value || 500));
+  const official = $("official").checked, addTags = $("tags").checked, addCountry = $("tagCountry").checked, addName = $("tagName").checked, addRoad = $("tagRoad").checked;
+  const sc = scope(), label = ownRun ? ownRun.label : searchLabel();
+  const codes = ownRun || sc === "world" ? null : sc === "cov" ? [...COVERAGE] : [...selected];
+  let filter = "";
+  if (!ownRun) { try { filter = (kind ? tagFilter(kind.tag) : "") + nameFilter(); } catch (e) { return show("error", e.message); } }
+  if (!key) return show("error", `Enter a Google API key in step ${lastStep()}.`);
+  if (minDist >= maxDist) return show("error", "The smallest distance has to be below the largest distance.");
+  if (codes && !codes.length) return show("error", "Tick one or more countries in step 2.");
+  if (!ownRun && !kind && sc !== "pick") return show("error", `A name search without a kind of place has to read everything on the map, which is too much for this many countries. Choose "Only the countries I choose" in step 2, or add a kind of place.`);
+  if (!ownRun && kind && !words.length && sc !== "pick" && kind.count > TOO_MANY) return show("error", `There are about ${fmt(kind.count)} of these worldwide, too many to search at once. Choose "Only the countries I choose" in step 2.`);
+
+  for (const id of ["maxDist", "minDist", "target"]) store.set(id, $(id).value);
+  store.set("official", official); store.set("tagKind", addTags); store.set("tagCountry", addCountry); store.set("tagName", addName); store.set("tagRoad", addRoad);
+  if (!GOOGLE_API_KEY) keyStore.set(key);
+
+  lastName = $("mapName").value.trim() || (ownRun ? ownRun.name : $("mapName").placeholder);
+  results = []; removed = []; S = stats(); $("fail").hidden = true;
+  layer?.clearLayers(); dots?.clearLayers(); initMap();
+  abort = new AbortController(); const signal = abort.signal;
+  const whereText = !codes ? "the whole world" : codes.length === 1 ? countryName(codes[0]) : `${codes.length} countries`;
+  if (!ownRun) { setPhase(1, `Looking up "${label}" on OpenStreetMap`, `Searching ${whereText}.`); paint("Asking OpenStreetMap for places…"); }
+  if (matchMedia("(max-width:860px)").matches) $("stage").scrollIntoView({ behavior: "smooth" });
+
+  let fatal = null; const notes = [];
+  osmUse.own = osmUse.pub = 0; osmUse.ownTrouble = "";
+  try {
+    // 1. places
+    let places, skipped;
+    if (ownRun) { places = ownRun.places.map(p => ({ ...p })); skipped = ownRun.skipped; }
+    else try {
+      ({ places, skipped } = await fetchPlaces(filter, codes, signal, p => {
+        if (p.fraction > 0) { $("track").classList.remove("busy"); $("track").classList.add("osm"); }
+        S.progress = p.fraction; S.places = p.places; paint();
+        phaseSub = p.waiting ? "The servers asked to slow down. Waiting 20 seconds before continuing."
+          : `Searching ${whereText}. ${Math.round(p.fraction * 100)}% done, ${fmt(p.places)} ${p.places === 1 ? "place" : "places"} so far.`;
+      }));
+    }
+    catch (e) {
+      if (e instanceof SearchError) { const [title, text] = explainOsm(e, { sc, kind }); e.title = title; e.text = text; e.retry = true; }
+      throw e;
+    }
+    S.places = places.length; S.progress = 0; S.skipped = skipped.length;
+    if (!ownRun && osmOwn) {
+      if (osmOwn.mode === "first" && osmUse.ownTrouble && osmUse.pub) notes.push(`Your own Overpass server could not be used for ${osmUse.own ? "part of" : ""} this search (${osmUse.ownTrouble.split("\n")[0].replace(/^.*?: /, "")}), so the public servers answered instead.`.replace("  ", " "));
+      if (osmOwn.mode === "fallback" && osmUse.own) notes.push(`The public servers failed for ${osmUse.pub ? "part of" : ""} this search; your own Overpass server answered instead.`.replace("  ", " "));
+    }
+    if (skipped.length) notes.push(`${skipped.length === 1 ? "One country was" : skipped.length + " countries were"} left out because OpenStreetMap could not read ${skipped.length === 1 ? "it" : "them"} in time: ${skipped.map(countryName).join(", ")}. To include ${skipped.length === 1 ? "it" : "them"}, search ${skipped.length === 1 ? "it" : "them"} separately with "Only the countries I choose", ideally with a name filter.`);
+    if (!places.length && skipped.length) throw Object.assign(new Error(`Nothing was found in the countries that could be read. ${notes[0]}`), { plain: true });
+    if (!places.length) throw Object.assign(new Error(words.length
+      ? "OpenStreetMap has no places with that name in the chosen area. Names are in the local language, so try other spellings."
+      : kind.count === 0 || kind.raw
+      ? "OpenStreetMap has no places with this tag in the chosen area. Check the spelling of the tag."
+      : "OpenStreetMap has no places of this kind in the chosen area."), { plain: true });
+    if (!ownRun) lastFetch = { places: places.map(p => ({ ...p })), skipped, label, name: lastName, where: whereText };
+    shuffle(places);
+    drawCandidates(places);
+    setPhase(2, "Checking Street View", `${fmt(places.length)} places to check.`);
+    paint("Checking Street View near each place…");
+
+    // 2. Street View
+    const seen = new Set(); let next = 0, lastPaint = 0;
+    const tagList = loc => [
+      ...(addTags ? [label] : []),
+      ...(addName && loc.poi.name ? [loc.poi.name] : []),
+      ...(addCountry && loc.poi.cc ? [countryName(loc.poi.cc)] : []),
+      ...(addRoad && loc.road === "has" ? ["Has road name"] : addRoad && loc.road === "none" ? ["No road name"] : []),
+    ];
+    const worker = async () => {
+      while (next < places.length && results.length < target && !signal.aborted && !fatal) {
+        const p = places[next++];
+        let r, tries = 0;
+        for (;;) {
+          r = await lookup(p, Math.ceil(maxDist), key, signal, official);
+          if (RETRY.has(r.status) && tries++ < 3) { await sleep(1500 * tries); continue; }
+          break;
+        }
+        S.checked++;
+        if (r.status === "REQUEST_DENIED") { fatal = new SearchError("key", r.detail ? "Google answered REQUEST_DENIED: " + r.detail : "Google answered REQUEST_DENIED."); break; }
+        if (r.status === "OK") {
+          let second = false;
+          if (official && !isOfficial(r.copyright)) {               // nearest is someone's own photo: look again for official coverage
+            const r2 = await officialNearby(p, maxDist, key, signal);
+            if (r2.status === "OK" && isOfficial(r2.copyright)) { r = r2; second = true; }
+          }
+          const d = distance(r.lat, r.lng, p.lat, p.lng);
+          const m = Math.round(d);
+          if (official && !isOfficial(r.copyright)) { S.unofficial++; markMissed(p, `Within ${maxDist} m there are only photos uploaded by other people, no official Google coverage.`, r); }
+          else if (d > maxDist) { S.far++; markMissed(p, `The nearest Street View is ${m} m away, beyond your ${maxDist} m.`, r); }
+          else if (d < minDist) { S.close++; markMissed(p, `The nearest Street View is only ${m} m away, closer than your ${minDist} m.`, r); }
+          else if (seen.has(r.panoId)) { S.dup++; markMissed(p, "Shares its Street View spot with another place on the map.", r); }
+          else if (results.length < target) {
+            seen.add(r.panoId); if (second) S.rescued++;
+            if (p.dot) { dots.removeLayer(p.dot); p.dot = null; }
+            const loc = { lat: r.lat, lng: r.lng, heading: bearing(r.lat, r.lng, p.lat, p.lng), panoId: r.panoId, date: r.date, dist: d, poi: p };
+            loc.tags = tagList(loc);
+            results.push(loc); drawLocation(loc);
+            if (addRoad) {                                    // ask Google whether a street name is shown at this spot
+              const info = await roadInfo(loc.panoId, key);
+              loc.road = info.state; loc.roadName = info.name || "";
+              S.road[info.state]++; loc.tags = tagList(loc);
+            }
+          }
+        } else if (r.status === "ZERO_RESULTS" || r.status === "NOT_FOUND") { S.none++; markMissed(p, `No Street View within ${maxDist} m.`); }
+        else {
+          const why = failReason(r), n = Math.min(tries, 3) + 1;
+          S.failed++; S.failWhy[why.key] = { n: (S.failWhy[why.key]?.n || 0) + 1, short: why.short };
+          markMissed(p, `The Street View lookup failed${n > 1 ? ` after ${n} tries` : ""}. ${why.text}`);
+        }
+        S.progress = Math.max(results.length / target, S.checked / places.length);
+        if (performance.now() - lastPaint > 150) {
+          lastPaint = performance.now(); paint();
+          $("liveSub").textContent = `${fmt(results.length)} found, ${fmt(S.checked)} of ${fmt(places.length)} checked.`;
+        }
+      }
+    };
+    await Promise.all(Array.from({ length: PARALLEL }, worker));
+    if (fatal) throw fatal;
+    S.progress = 1; setPhase(0);
+    if (signal.aborted) paint(`Stopped. ${fmt(results.length)} locations so far.`);
+    else if (results.length >= target) paint(target === 1 ? "Done. Found the location you asked for." : `Done. Found the ${fmt(target)} locations you asked for.`);
+    else {
+      paint(`Done. Every place was checked; ${fmt(results.length)} ${results.length === 1 ? "has" : "have"} Street View within range.`);
+      if (!results.length && !S.failed) notes.push(`No place had Street View within your distance. Try a larger distance in step ${lastStep()}.`);
+    }
+    if (S.failed && !signal.aborted) {
+      const why = Object.entries(S.failWhy).sort((x, y) => y[1].n - x[1].n), top = why[0][0];
+      const advice = top === "limit" ? "Wait a few minutes, or check the key's quota in the Google Cloud console, then run the search again."
+        : top === "network" ? "Check your connection and any blockers, then run the search again."
+        : top === "malformed" || top === "invalid" || top === "other" ? "This should not happen; pass the reason on to whoever runs this page."
+        : "Run the search again later to pick them up.";
+      notes.push(`${fmt(S.failed)} Street View ${S.failed === 1 ? "lookup" : "lookups"} failed, so ${S.failed === 1 ? "that place was" : "those places were"} skipped. Cause: ${why.map(([, v]) => `${fmt(v.n)} × ${v.short}`).join(", ")}. ${advice} Select a muted dot to see the reason for a single place.`);
+    }
+    if (S.road.unknown) notes.push(`${fmt(S.road.unknown)} ${S.road.unknown === 1 ? "location" : "locations"} could not be checked for a road name and ${S.road.unknown === 1 ? "has" : "have"} no road tag. ${scriptBroken ? "Google's Maps JavaScript API could not be used with this key; enable it in the Google Cloud console." : "Google gave no answer for them; running the search again may fill them in."}`);
+    if (notes.length) show("note", notes.join(" "));
+  } catch (e) {
+    setPhase(0);
+    if (e.name === "AbortError") paint(`Stopped. ${fmt(results.length)} locations so far.`);
+    else {
+      let title, text, detail = e.detail || "";
+      if (e.title) { title = e.title; text = e.text; }
+      else if (e.kind === "key" || e.message === "denied") {
+        title = "Google rejected the API key";
+        text = GOOGLE_API_KEY ? "The key built into this page was refused. The owner of this page needs to check that the key is valid, that the Street View Static API is enabled for it, and that this site's address is allowed."
+          : `Check that the key in step ${lastStep()} is complete, that the Street View Static API is enabled for it, and that this site's address is allowed in the Google Cloud console.`;
+      } else if (e.message === "unreachable") {
+        title = "Google Street View could not be reached";
+        text = "The page could not contact Google. Check your internet connection. Ad blockers, script blockers and company firewalls can also block Google's address.";
+      } else if (e.plain) { title = "No places found"; text = e.message; }
+      else {
+        title = "The search stopped unexpectedly";
+        text = "Something went wrong inside the page itself. Running the search again often works. If it keeps happening, pass the technical details to whoever runs this page.";
+        detail = String(e && (e.stack || e.message || e)).slice(0, 600);
+      }
+      if (!results.length) S.progress = 0;
+      fail(title, text, detail, !!e.retry);
+      paint(results.length ? `Stopped early. ${title}. ${fmt(results.length)} locations so far.` : `Stopped. ${title}.`);
+    }
+  }
+  setPhase(0); paint();
+}
+
+/* ---------- export ---------- */
+function exportJson() {
+  return JSON.stringify({
+    name: lastName,
+    customCoordinates: results.map(l => {
+      const o = { lat: +l.lat.toFixed(7), lng: +l.lng.toFixed(7), heading: +l.heading.toFixed(1), pitch: 0, zoom: 0, panoId: l.panoId };
+      if (l.poi.cc) o.countryCode = l.poi.cc;
+      if (l.tags.length) o.extra = { tags: l.tags };
+      return o;
+    }),
+  });
+}
+$("download").onclick = () => {
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([exportJson()], { type: "application/json" }));
+  a.download = (norm(lastName).replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "lookout-map") + ".json";
+  a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+};
+$("tally").onclick = e => { if (e.target.id === "undo") undoRemove(); };
+$("copy").onclick = async () => {
+  try { await navigator.clipboard.writeText(exportJson()); $("copy").textContent = "Copied"; }
+  catch { $("copy").textContent = "Copy failed"; }
+  setTimeout(() => $("copy").textContent = "Copy", 1500);
+};
+paint();
+if (fromLink) linkNote();
+
+/* ---------- welcome, shown once per browser ---------- */
+let welcomeBack = null;
+function openWelcome() {
+  welcomeBack = document.activeElement;
+  $("welcome").hidden = false; $("welcomeBox").focus({ preventScroll: true }); $("welcomeBox").scrollTop = 0;   // start reading at the top
+  store.set("welcomed", true);
+}
+function closeWelcome() {
+  if ($("welcome").hidden) return;
+  $("welcome").hidden = true;
+  reapplyLink();
+  if (welcomeBack && welcomeBack.focus && welcomeBack !== document.body) welcomeBack.focus();
+}
+$("welcome").onclick = e => { if (e.target === $("welcome")) closeWelcome(); };     // a click outside the box
+$("welcomeX").onclick = closeWelcome; $("welcomeOk").onclick = closeWelcome;
+$("howBtn").onclick = openWelcome;
+document.addEventListener("keydown", e => {
+  if ($("welcome").hidden) return;
+  if (e.key === "Escape") closeWelcome();
+  if (e.key === "Tab") {                                                             // keep the keyboard inside the box
+    const f = [$("welcomeX"), $("welcomeOk")], i = f.indexOf(document.activeElement);
+    e.preventDefault(); f[(i + (e.shiftKey ? f.length - 1 : 1) + f.length) % f.length].focus();
+  }
+});
+$("welcomeN").textContent = $("welcomeN2").textContent = COVERAGE.size;
+if (!store.get("welcomed", false)) openWelcome();
+</script>
+</body>
+</html>

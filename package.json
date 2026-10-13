@@ -1,0 +1,20 @@
+{
+  "name": "osm-tool",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Lookout: build map-making.app maps of Street View locations that face a chosen kind of place from OpenStreetMap.",
+  "license": "MIT",
+  "scripts": {
+    "build": "node src/build.js",
+    "test": "node tests/run.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "devDependencies": {
+    "@fontsource/overpass": "5.3.0",
+    "@openstreetmap/id-tagging-schema": "7.2.0",
+    "leaflet": "1.9.4",
+    "playwright": "1.56.0"
+  }
+}
