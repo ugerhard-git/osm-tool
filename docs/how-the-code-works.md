@@ -62,6 +62,12 @@ The code is formatted with [Prettier](https://prettier.io). `npm run format` for
 
 The first formatting commit is listed in `.git-blame-ignore-revs`, so GitHub's "blame" view skips it. To do the same locally, run `git config blame.ignoreRevsFile .git-blame-ignore-revs` once.
 
+## Linting
+
+[ESLint](https://eslint.org) looks for likely mistakes: names that do not exist, variables that are never used, code that has no effect. `npm run lint` runs it; it also runs on every pull request, and the recommended VS Code extension underlines problems as you type. The settings are in `eslint.config.mjs`. They know which names the page provides besides `app.js` (Leaflet's `L`, `CAT`, `FRAMED`, `google`), and they let the tests use `app.js`'s top-level names inside `page.evaluate`, read straight from `app.js`.
+
+If a rule is wrong in one particular spot, switch it off for that line with a comment that says why, as for `officialVia` in `app.js`.
+
 ## Tests
 
 ```sh

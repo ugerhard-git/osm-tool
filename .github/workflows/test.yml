@@ -24,6 +24,8 @@ jobs:
       - run: npm ci --ignore-scripts
       - name: Check formatting
         run: npm run format:check
+      - name: Check for likely mistakes
+        run: npm run lint
       - run: npx playwright install --with-deps chromium
       - run: npm run build
       - run: npm test

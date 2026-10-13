@@ -1,6 +1,5 @@
 const { chromium } = require("./pw.js");
 const { PAGE, isSite, serveSite } = require("./site.js");
-const path = require("path");
 const H = { "access-control-allow-origin": "*" };
 const P = (id, lat, lon, name) => ({ type: "node", id, lat, lon, tags: { name } });
 const off = (lat, lng, name) => ({
@@ -93,7 +92,7 @@ async function run(b, name, { places, rest, js, check }) {
   console.log(
     `\n[${name}] found: ${o.found.join(", ") || "-"} | via ${o.via || "-"} | js calls: ${o.js.join(", ") || "-"} | REST calls: ${reqs.length}`,
   );
-  for (const [k, v] of Object.entries(o.pops)) console.log("  popup:", v);
+  for (const v of Object.values(o.pops)) console.log("  popup:", v);
   if (o.note) console.log("  note:", o.note);
   console.log("  tally:", o.tally.replace(/Select a muted.*$/, ""));
   const good = check(o, reqs) && errs.length === 0;
@@ -154,7 +153,6 @@ async function run(b, name, { places, rest, js, check }) {
     P(6, 35.95, 14.55, "Fine"),
     P(7, 35.96, 14.56, "Strange status"),
   ];
-  let first = true;
   fail += await run(b, "failure-reasons", {
     places: places5,
     rest: (lat, lng, n) => {

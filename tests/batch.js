@@ -1,10 +1,9 @@
 const { chromium } = require("./pw.js");
 const { PAGE, isSite, serveSite } = require("./site.js");
-const path = require("path");
 const H = { "access-control-allow-origin": "*" };
 const codesOf = q => /\^\(([A-Z|]+)\)\$/.exec(q)[1].split("|");
 const answer = codes => ({
-  elements: codes.flatMap((c, i) => [
+  elements: codes.flatMap(c => [
     { type: "area", id: 3600000000 + c.charCodeAt(0) * 100 + c.charCodeAt(1), tags: { "ISO3166-1": c } },
     {
       type: "node",

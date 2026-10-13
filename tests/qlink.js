@@ -1,6 +1,5 @@
 const { chromium } = require("playwright");
 const { PAGE, isSite, serveSite } = require("./site.js");
-const path = require("path");
 (async () => {
   const b = await chromium.launch();
   let fail = 0;
@@ -14,8 +13,8 @@ const path = require("path");
       kind: document.getElementById("kind").value,
       scope: scope(),
       c: [...selected].sort().join(),
-      d: maxDist.value,
-      t: target.value,
+      d: document.getElementById("maxDist").value,
+      t: document.getElementById("target").value,
     }));
   const want = s =>
     s.kind === "Lighthouse" && s.scope === "pick" && s.c === "DK,IS" && s.d === "50" && s.t === "1000";

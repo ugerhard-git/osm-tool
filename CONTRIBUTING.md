@@ -19,9 +19,9 @@ Please don't post API keys or keyed server addresses in issues.
 2. `npm install`, then `npm run build` and `npm test`. See the README.
 3. Make your change in `src/`. Never edit `dist/`; it is generated. [How the code works](docs/how-the-code-works.md) explains where things are.
 4. Add or update a test in `tests/` for what you changed. The tests simulate OpenStreetMap, taginfo and Google, so they run offline.
-5. Run `npm run format`, then `npm run build && npm test`, and open a pull request describing the change and why.
+5. Run `npm run format` and `npm run lint`, then `npm run build && npm test`, and open a pull request describing the change and why.
 
-The formatting check and the tests run automatically on every pull request. In VS Code, install the recommended extensions when asked; files are then formatted when you save.
+The formatting check, the linter and the tests run automatically on every pull request. In VS Code, install the recommended extensions when asked: files are then formatted when you save, and likely mistakes are underlined as you type.
 
 ## Guidelines
 

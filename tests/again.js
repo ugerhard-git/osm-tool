@@ -1,6 +1,5 @@
 const { chromium } = require("./pw.js");
 const { PAGE, isSite, serveSite } = require("./site.js");
-const path = require("path");
 const H = { "access-control-allow-origin": "*" };
 const N = (id, lat, lon, name) => ({ type: "node", id, lat, lon, tags: { name } });
 const els = [

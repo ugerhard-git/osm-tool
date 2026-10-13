@@ -1,6 +1,5 @@
 const { chromium } = require("playwright");
 const { PAGE, isSite, serveSite } = require("./site.js");
-const path = require("path");
 (async () => {
   const b = await chromium.launch();
   let fail = 0;
