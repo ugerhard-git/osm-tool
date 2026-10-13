@@ -8,6 +8,7 @@ const { chromium } = require('playwright'); const path = require('path');
   const t = await p.innerText('.welcome-box'); console.log(t.split('\n').filter(Boolean).map(l=>'  | '+l).join('\n'));
   ok(/often busy and slow/.test(t) && /run out of time/.test(t) && /several attempts/.test(t), 'warns about slow servers, timeouts and retries');
   ok(/Searching all 119 Street View countries at once takes a long time and is likely to run out of time/.test(t) && /one or two countries/.test(t), 'advises one or two countries at a time');
+  ok(/"Whole world" is usually faster than all Street View countries, but its locations get no country tag/.test(t), 'explains Whole world is faster but has no country tag');
   await p.screenshot({path:require('path').join(__dirname,'../dist/screens/w1.png')});
   await p.click('.welcome-box h2'); ok(await p.isVisible('#welcome'), 'a click inside the box does not close it');
   await p.mouse.click(20, 20); ok(await p.isHidden('#welcome'), 'a click outside the box closes it');
