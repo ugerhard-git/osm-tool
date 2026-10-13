@@ -65,6 +65,8 @@ const done = page => page.waitForFunction(() => !running && !/Ready/.test(docume
     ok(await page.evaluate(()=>{ const t=document.getElementById('target'); return t.defaultValue; })==='1000', 'default 1000 locations wanted');
     ok(JSON.stringify(await page.$$eval('input[name=scope]', rs=>rs.map(r=>r.value)))==='["pick","world","cov"]', 'Street View countries listed third');
     ok(!/Maps JavaScript API/.test(await page.textContent('label:has(#tagRoad)')), 'road tag hint has no API note');
+    { const gap = await page.evaluate(()=>document.querySelector('input[name=scope][value=world]').closest('label').getBoundingClientRect().top - document.getElementById('pickBox').getBoundingClientRect().bottom);
+      ok(gap >= 14, 'space between country list and Whole world: '+gap); }
     ok(/119 countries/.test(await page.textContent('#covHint')), 'coverage hint: '+await page.textContent('#covHint'));
     await page.fill('#maxDist','25');   // the checks below were written for 25 m
     await page.fill('#apiKey','KEY');
