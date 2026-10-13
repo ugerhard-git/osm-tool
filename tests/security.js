@@ -9,6 +9,8 @@ const page = path.resolve(__dirname, '../dist/index.nokey.html');
   ok(!/unsafe-inline|unsafe-eval|\*\.googleapis\.com|https:(\s|$)|\*(\s|$)/.test(script), 'scripts: only fingerprinted inline code and Google\'s own script hosts: ' + script.replace(/'sha256-[^']*'/g, 'sha'));
   ok(/default-src 'none'/.test(csp) && /object-src 'none'/.test(csp) && /base-uri 'none'/.test(csp) && /form-action 'none'/.test(csp), 'default, plugins, base address and form targets locked down');
   ok(!/https?:\/\/(cdnjs|unpkg|cdn\.jsdelivr|fonts\.googleapis)/.test(html), 'no libraries or fonts from CDNs');
+  ok(!/\/\*(APP_CSS|APP_JS|CATALOG|LEAFLET_JS|LEAFLET_CSS|FONT_CSS|CSP)\*\//.test(html), 'every build placeholder filled in');
+  ok(!/<script[^>]+src=|<link[^>]+stylesheet/i.test(html) && html.includes(fs.readFileSync(path.resolve(__dirname, '../src/app.js'), 'utf8').trim()) && html.includes(fs.readFileSync(path.resolve(__dirname, '../src/style.css'), 'utf8').trim()), 'one self-contained file with the app code and styles inside');
   ok(!/AIza[0-9A-Za-z_-]{35}/.test(html.replace('AIza…', '')), 'no Google key in the key-less build');
 
   // framed by another page: the app does not run, a link opens it on its own

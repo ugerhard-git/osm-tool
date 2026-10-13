@@ -51,9 +51,11 @@ The tests drive the page in a headless browser. OpenStreetMap, taginfo and Googl
 
 | Path | What it is |
 |---|---|
-| `src/template.html` | The page: markup, styles and app code |
+| `src/page.html` | The page's markup and site owner settings |
+| `src/style.css` | The page's styles |
+| `src/app.js` | The app code |
 | `src/catalog.js` | Builds the place catalogue from the iD editor presets |
-| `src/build.js` | Assembles `dist/index.html` and its security policy |
+| `src/build.js` | Assembles everything into the single file `dist/index.html`, with its security policy |
 | `tests/` | Browser tests, one file per feature area; `run.js` runs them all |
 | `.github/workflows/` | Tests on every pull request; publishing to GitHub Pages from `main` |
 

@@ -1,0 +1,297 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lookout: Street View maps that face a kind of place</title>
+<meta http-equiv="Content-Security-Policy" content="/*CSP*/">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<!-- ------------------------------------------------------------------
+  SITE OWNER SETTINGS. Edit only the values between the quotes.
+
+  googleApiKey         Your Google API key. Leave it empty in the repository: the build
+                       fills it in from the GOOGLE_API_KEY environment variable.
+                       It needs the "Street View Static
+                       API" enabled. In the Google Cloud console, restrict it
+                       to this site's address and to that API, and set a daily
+                       quota. If left empty, visitors are asked for their own key.
+  streetViewCountries  Two-letter codes of the countries searched by default.
+
+  Do not edit the script blocks further down: the page only runs scripts
+  whose fingerprint matches the security policy above.
+------------------------------------------------------------------- -->
+<script type="application/json" id="lookout-config">
+{
+  "googleApiKey": "",
+  "streetViewCountries": "AD AE AL AR AS AT AU AX BA BD BE BG BM BO BR BT BW CA CC CH CL CO CR CW CX CY CZ DE DK DO EC EE ES FI FO FR GB GE GH GI GL GR GT GU HK HR HU ID IE IL IM IN IS IT JE JO JP KE KG KH KR KZ LA LI LK LS LT LU LV MC ME MK MN MO MP MT MX MY NA NG NL NO NP NZ OM PA PE PH PL PR PS PT PY QA RE RO RS RU RW SE SG SI SK SM SN ST SZ TH TN TR TW UA UG US UY VI VN XK ZA"
+}
+</script>
+<style>
+/*FONT_CSS*/
+/*LEAFLET_CSS*/
+</style>
+<style>
+/*APP_CSS*/
+</style>
+</head>
+<body>
+<div class="framed" id="framed" hidden>
+  <p><b>Lookout cannot be used inside another page.</b></p>
+  <p><a id="framedLink" href="./" target="_top" rel="noopener">Open Lookout on its own</a></p>
+</div>
+<div class="welcome" id="welcome" hidden>
+  <div class="welcome-box" id="welcomeBox" role="dialog" aria-modal="true" aria-labelledby="welcomeTitle" tabindex="-1">
+    <button type="button" class="welcome-x" id="welcomeX" aria-label="Close">×</button>
+    <h2 id="welcomeTitle">Welcome to Lookout</h2>
+    <p>Lookout builds a map of Street View locations that stand near one kind of place and face it: every lighthouse, windmill or castle with Street View nearby, for example. You then import the result into map-making.app.</p>
+    <ol>
+      <li><b>Choose what to look at.</b> Type a kind of place and pick a suggestion. You can also give words the name must contain.</li>
+      <li><b>Choose where.</b> Tick one or two countries at a time. Searching all <span id="welcomeN">119</span> countries with Street View at once is possible, but slow.</li>
+      <li><b>Set how close and how many,</b> then select "Find locations".</li>
+      <li><b>Review and download.</b> Check the locations on the map or under "List by name", remove the ones you don't want, then download the map file.</li>
+    </ol>
+    <div class="welcome-warn">
+      <b>Expect to wait, and sometimes to try again.</b>
+      The places come from free OpenStreetMap servers that are often busy and slow. A search can take a minute or more, and it can run out of time without a result. When that happens, select "Try again". It can take several attempts.
+    </div>
+    <div class="welcome-warn">
+      <b>Search one or two countries at a time.</b>
+      Searching all <span id="welcomeN2">119</span> Street View countries at once takes a long time and is likely to run out of time, except for rare kinds of place. In step 2, tick one or two countries, and run the search again for the next ones. "Whole world" is usually faster than all Street View countries, but its locations get no country tag in the map-making.app file.
+    </div>
+    <button type="button" class="btn primary" id="welcomeOk">Start</button>
+  </div>
+</div>
+<div class="app">
+  <form class="panel" id="form" autocomplete="off">
+    <h1>Lookout</h1>
+    <p class="lede">Build a map of Street View spots that stand near one kind of place and face it. Import the result into map-making.app. <button type="button" class="howbtn" id="howBtn">How it works</button></p>
+
+    <fieldset id="fields">
+    <section class="step" id="ownStep" hidden>
+      <h2><span class="n">1</span>Your own places</h2>
+      <div class="picked" id="ownSummary"></div>
+      <div class="field">
+        <label for="ownLabel">What are these places?</label>
+        <input type="text" id="ownLabel" maxlength="80" placeholder="for example Castles">
+        <p class="hint">Used for the map name and the kind-of-place tag.</p>
+      </div>
+      <button type="button" class="btn" id="ownRemove">Remove these places and search OpenStreetMap instead</button>
+    </section>
+    <section class="step" id="stepKind">
+      <h2><span class="n">1</span>What should each location look at?</h2>
+      <div class="labelrow">
+        <label for="kind">Kind of place</label>
+        <select id="lang" aria-label="Language for suggestions"></select>
+      </div>
+      <div class="combo">
+        <input type="text" id="kind" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="suggest"
+          placeholder="Start typing, for example lighthouse" spellcheck="false">
+        <ul class="suggest" id="suggest" role="listbox" hidden></ul>
+      </div>
+      <div class="picked" id="picked" hidden></div>
+      <div class="field">
+        <label for="nameHas">Name contains <span class="opt">optional</span></label>
+        <input type="text" id="nameHas" placeholder="for example alpaka, alpaca" spellcheck="false">
+        <p class="hint">Keeps only places whose name includes one of these words. Separate alternatives with commas. Works together with a kind of place, or alone.</p>
+      </div>
+      <details class="help" id="help">
+        <summary>Can't find it? Write a tag yourself</summary>
+        <div class="body">
+          <p>Places come from OpenStreetMap, where every object carries labels called tags, written as <code>key=value</code>. The suggestions cover the common ones. Anything else can be typed straight into the field.</p>
+          <table class="syntax">
+            <tr><td><code>historic=castle</code></td><td>Everything tagged as a castle.</td></tr>
+            <tr><td><code>amenity=pub|bar</code></td><td>Either value. Separate choices with <code>|</code>.</td></tr>
+            <tr><td><code>historic=*</code></td><td>Any value for that key.</td></tr>
+            <tr><td><code>amenity=fast_food, brand=KFC</code></td><td>Both tags must be present. Separate with a comma.</td></tr>
+          </table>
+          <h3>Looking for one specific thing</h3>
+          <p>Combine a kind of place with "Name contains". For replicas of the Statue of Liberty, choose "Artwork" and enter <code>liberty, liberté, freiheitsstatue, libertad</code>. Names are written in the local language, so add the spellings you expect.</p>
+          <h3>Finding the tag of a real place</h3>
+          <p>Open <a href="https://www.openstreetmap.org" target="_blank" rel="noopener">openstreetmap.org</a>, right-click an example and choose "Query features". Pick the entry in the list and read its tags. Use the one that says what the thing is, not its name or address.</p>
+          <div class="examples" id="examples"></div>
+        </div>
+      </details>
+    </section>
+
+    <section class="step" id="stepWhere">
+      <h2><span class="n">2</span>Where?</h2>
+      <label class="radio"><input type="radio" name="scope" value="pick" checked><span><b>Only the countries I choose</b></span></label>
+      <div id="pickBox" hidden>
+        <div class="chips" id="chips"></div>
+        <input type="search" id="countrySearch" placeholder="Search countries" aria-label="Search countries">
+        <div class="countries" id="countries"></div>
+      </div>
+      <label class="radio"><input type="radio" name="scope" value="world"><span><b>Whole world</b><br><span class="hint">Includes countries Google has not driven. Locations get no country code.</span></span></label>
+      <label class="radio"><input type="radio" name="scope" value="cov"><span><b>Countries with Street View</b><br><span class="hint" id="covHint"></span></span></label>
+      <div class="msg note" id="scopeNote" hidden></div>
+    </section>
+
+    <section class="step">
+      <h2><span class="n" id="lastStepNo">3</span>How close, and how many?</h2>
+      <div class="row">
+        <div>
+          <label for="maxDist">At most this far away</label>
+          <div class="unit"><input type="number" id="maxDist" min="5" max="2000" step="5" value="50"><span>m</span></div>
+        </div>
+        <div>
+          <div class="labelrow tight">
+            <label for="target">Locations wanted</label>
+            <button type="button" class="info" id="targetInfoBtn" aria-expanded="false" aria-controls="targetInfo" aria-label="What does Locations wanted do?">?</button>
+          </div>
+          <input type="number" id="target" min="1" max="100000" step="1" value="1000">
+        </div>
+      </div>
+      <div class="infobox" id="targetInfo" hidden>
+        <p><b>The search stops once this many locations are found.</b> It is an upper limit, not a promise: if fewer places have Street View within range, you get all of those.</p>
+        <ul>
+          <li>Every matching place is fetched from OpenStreetMap first, then checked in random order. You get a random selection, and running the search again gives a different one.</li>
+          <li>Locations are not spread evenly. Countries with more matching places get more locations.</li>
+          <li>To get every place, enter a number higher than the places found. The largest allowed is 100,000.</li>
+          <li>If you remove a location while the search is running, it looks for a replacement.</li>
+        </ul>
+      </div>
+      <p class="hint">Shorter distances give clearer views but fewer locations. Raise it for large buildings and grounds.</p>
+      <div class="field">
+        <label for="minDist">At least this far away</label>
+        <div class="unit"><input type="number" id="minDist" min="0" max="1000" step="5" value="0"><span>m</span></div>
+        <p class="hint">Raise this for tall things that are hard to see from right underneath.</p>
+      </div>
+      <label class="check"><input type="checkbox" id="official" checked><span>Official Google coverage only<br><span class="hint">Skips photos uploaded by other people.</span></span></label>
+      <label class="check" id="tagCountryRow"><input type="checkbox" id="tagCountry" checked><span>Tag each location with its country<span class="hint" id="tagCountryHint" hidden></span></span></label>
+      <label class="check"><input type="checkbox" id="tags"><span>Tag each location with the kind of place</span></label>
+      <label class="check"><input type="checkbox" id="tagName"><span>Tag each location with the name of the place<br><span class="hint">Only where OpenStreetMap has a name for it.</span></span></label>
+      <label class="check"><input type="checkbox" id="tagRoad"><span>Tag each location with "Has road name" or "No road name"<br><span class="hint">Whether Street View shows a street name on the ground at that spot.</span></span></label>
+      <div class="field">
+        <label for="mapName">Map name</label>
+        <input type="text" id="mapName" placeholder="Filled in for you">
+      </div>
+      <div class="field" id="keyBox" hidden>
+        <label for="apiKey">Google API key</label>
+        <input type="password" id="apiKey" placeholder="AIza…" spellcheck="false">
+        <p class="hint">Needs the Street View Static API enabled. Kept only until you close this tab.</p>
+      </div>
+    </section>
+    </fieldset>
+
+    <button class="go" id="go" type="submit">Find locations</button>
+    <div class="again" id="againBox" hidden>
+      <button class="btn" id="again" type="button">Check Street View again on the same places</button>
+      <p class="hint" id="againHint"></p>
+    </div>
+    <button class="sharebtn" id="share" type="button">Copy a link to this search</button>
+    <div id="message" class="msg" hidden role="alert"></div>
+
+    <details class="help" id="expert">
+      <summary>Expert: the OpenStreetMap query, or your own result</summary>
+      <div class="body">
+        <h3>The query</h3>
+        <p>The Overpass query for the settings in steps 1 and 2. It updates as you change them. Results come grouped by country: each country's area is followed by its places. The page itself sends this query in several parts, a few countries at a time.</p>
+        <textarea id="queryText" readonly rows="9" spellcheck="false" aria-label="Overpass query"></textarea>
+        <div class="qrow">
+          <button class="btn" type="button" id="copyQuery">Copy query</button>
+          <a id="turbo" href="https://overpass-turbo.eu/" target="_blank" rel="noopener">Open in Overpass Turbo</a>
+        </div>
+
+        <h3>Use your own Overpass server</h3>
+        <p>If you have access to a paid or private Overpass server, enter its address here, including your key. Examples: <code>https://tile.tracestrack.com/overpass/YOUR-KEY/</code> or <code>https://overpass.geofabrik.de/YOUR-KEY/api/interpreter</code>. The page tests the address before using it.</p>
+        <label for="srvUrl">Server address with key</label>
+        <input type="text" id="srvUrl" placeholder="https://…" spellcheck="false" autocomplete="off" autocapitalize="off">
+        <label class="radio srv"><input type="radio" name="srvMode" value="first" checked><span><b>Use it for every search</b><br><span class="hint">The public servers are only tried if it fails.</span></span></label>
+        <label class="radio srv"><input type="radio" name="srvMode" value="fallback"><span><b>Use it only as a fallback</b><br><span class="hint">The public servers are tried first; yours steps in when they time out or report an error.</span></span></label>
+        <label class="check"><input type="checkbox" id="srvRemember" checked><span>Remember this server in this browser<br><span class="hint">If unticked, it is kept only until you close this tab.</span></span></label>
+        <div class="qrow">
+          <button class="btn" type="button" id="srvSave">Test and use this server</button>
+          <button class="btn" type="button" id="srvForget" hidden>Forget this server</button>
+        </div>
+        <div class="picked" id="srvStatus" hidden></div>
+        <div class="msg error" id="srvError" hidden role="alert"></div>
+        <p class="hint">The address contains your key. It stays in this browser, is sent only to that server, and is never put into a shared link.</p>
+
+        <h3>Use your own Overpass result</h3>
+        <p>Run any query in Overpass Turbo and load its result here. The page then skips its own OpenStreetMap search and only checks Street View near your places.</p>
+        <p><b>Only one format is accepted: raw OSM data as JSON.</b> In Overpass Turbo choose Export, then Data, then "raw OSM data". The query must start with <code>[out:json]</code> and should end with <code>out center;</code> so that outlines get a position. GeoJSON, GPX, KML and XML files are not accepted.</p>
+        <p>Country codes and country tags are kept only if the query has the country grouping of the query above. The file is read in your browser and is not sent anywhere.</p>
+        <div class="drop" id="ownDrop">
+          <label class="btn" for="ownFile">Choose a file</label>
+          <input type="file" id="ownFile" accept=".json,.txt,.osm,application/json,text/plain" class="visually-hidden">
+          <span class="hint">or drop it here</span>
+        </div>
+        <textarea id="ownText" rows="4" spellcheck="false" placeholder="…or paste the raw OSM data here" aria-label="Paste raw OSM data"></textarea>
+        <div class="qrow"><button class="btn" type="button" id="ownUse">Use the pasted text</button></div>
+        <div class="msg error" id="ownError" hidden role="alert"></div>
+      </div>
+    </details>
+
+    <p class="foot">Place data and place names © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap contributors</a>, fetched through the Overpass API and taginfo. Street View lookups use Google's metadata service. A location being near a place does not guarantee the place is visible, so review the map before publishing it.</p>
+  </form>
+
+  <div class="stage" id="stage">
+    <div class="mapwrap">
+      <div id="map"></div>
+      <aside class="names" id="names" hidden aria-label="Named locations">
+        <div class="names-head">
+          <strong id="namesTitle">Named locations</strong>
+          <button type="button" class="btn" id="namesClose">Close</button>
+        </div>
+        <input type="search" id="namesFilter" placeholder="Filter by name or country" aria-label="Filter the list">
+        <ul id="namesList"></ul>
+        <p class="hint" id="namesNote"></p>
+      </aside>
+    </div>
+    <div class="empty" id="empty"><strong>Nothing found yet</strong>Choose a kind of place and select "Find locations".</div>
+    <div class="failcard" id="fail" hidden role="alert">
+      <div class="fail-title" id="failTitle"></div>
+      <p id="failText"></p>
+      <details id="failMore"><summary>Technical details</summary><pre id="failDetail"></pre></details>
+      <div class="fail-acts">
+        <button type="button" class="btn primary" id="failRetry" hidden>Try again</button>
+        <button type="button" class="btn" id="failClose">Close</button>
+      </div>
+    </div>
+    <div class="live" id="live" hidden role="status">
+      <div class="spin"></div>
+      <div>
+        <div class="live-title" id="liveTitle"></div>
+        <div class="live-sub" id="liveSub"></div>
+        <ol class="stages">
+          <li id="st1">Find the places on OpenStreetMap</li>
+          <li id="st2">Check Street View near each one</li>
+        </ol>
+      </div>
+    </div>
+    <div class="bar">
+      <div class="status" aria-live="polite">
+        <div class="now" id="now">Ready.</div>
+        <div class="track" id="track"><i id="fill"></i></div>
+        <div class="tally" id="tally"></div>
+      </div>
+      <div class="out">
+        <div class="count"><span id="count">0</span><small>locations</small></div>
+        <button class="btn primary" id="download" type="button" disabled>Download map file</button>
+        <button class="btn" id="copy" type="button" disabled>Copy</button>
+        <button class="btn" id="namesOpen" type="button" disabled aria-expanded="false" aria-controls="names">List by name</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>/*LEAFLET_JS*/</script>
+<script>
+/* Place catalogue: names and search words from the OpenStreetMap iD editor presets
+   (id-tagging-schema, ISC licence), in English, German, French, Spanish and Portuguese. */
+const CAT = /*CATALOG*/;
+/* Inside another site's frame, show only a link to open the app on its own, so nobody can lay a fake
+   page over it and trick clicks (the security policy in the page itself cannot forbid framing). */
+let FRAMED = false;
+try { FRAMED = window.top !== window.self; } catch { FRAMED = true; }
+if (FRAMED) {
+  document.querySelector(".app").hidden = true;
+  document.getElementById("framed").hidden = false;
+  document.getElementById("framedLink").href = location.href.split("#")[0];
+}
+</script>
+<script>
+/*APP_JS*/
+</script>
+</body>
+</html>
