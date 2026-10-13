@@ -352,7 +352,6 @@ a{color:var(--blue-dark)}
 
     <section class="step" id="stepWhere">
       <h2><span class="n">2</span>Where?</h2>
-      <label class="radio"><input type="radio" name="scope" value="cov"><span><b>Countries with Street View</b><br><span class="hint" id="covHint"></span></span></label>
       <label class="radio"><input type="radio" name="scope" value="pick" checked><span><b>Only the countries I choose</b></span></label>
       <div id="pickBox" hidden>
         <div class="chips" id="chips"></div>
@@ -360,6 +359,7 @@ a{color:var(--blue-dark)}
         <div class="countries" id="countries"></div>
       </div>
       <label class="radio"><input type="radio" name="scope" value="world"><span><b>Whole world</b><br><span class="hint">Includes countries Google has not driven. Locations get no country code.</span></span></label>
+      <label class="radio"><input type="radio" name="scope" value="cov"><span><b>Countries with Street View</b><br><span class="hint" id="covHint"></span></span></label>
       <div class="msg note" id="scopeNote" hidden></div>
     </section>
 
@@ -368,14 +368,14 @@ a{color:var(--blue-dark)}
       <div class="row">
         <div>
           <label for="maxDist">At most this far away</label>
-          <div class="unit"><input type="number" id="maxDist" min="5" max="2000" step="5" value="25"><span>m</span></div>
+          <div class="unit"><input type="number" id="maxDist" min="5" max="2000" step="5" value="50"><span>m</span></div>
         </div>
         <div>
           <div class="labelrow tight">
             <label for="target">Locations wanted</label>
             <button type="button" class="info" id="targetInfoBtn" aria-expanded="false" aria-controls="targetInfo" aria-label="What does Locations wanted do?">?</button>
           </div>
-          <input type="number" id="target" min="1" max="100000" step="1" value="500">
+          <input type="number" id="target" min="1" max="100000" step="1" value="1000">
         </div>
       </div>
       <div class="infobox" id="targetInfo" hidden>
@@ -397,7 +397,7 @@ a{color:var(--blue-dark)}
       <label class="check" id="tagCountryRow"><input type="checkbox" id="tagCountry" checked><span>Tag each location with its country<span class="hint" id="tagCountryHint" hidden></span></span></label>
       <label class="check"><input type="checkbox" id="tags"><span>Tag each location with the kind of place</span></label>
       <label class="check"><input type="checkbox" id="tagName"><span>Tag each location with the name of the place<br><span class="hint">Only where OpenStreetMap has a name for it.</span></span></label>
-      <label class="check"><input type="checkbox" id="tagRoad"><span>Tag each location with "Has road name" or "No road name"<br><span class="hint">Whether Street View shows a street name on the ground at that spot. Needs the Maps JavaScript API enabled on the Google key.</span></span></label>
+      <label class="check"><input type="checkbox" id="tagRoad"><span>Tag each location with "Has road name" or "No road name"<br><span class="hint">Whether Street View shows a street name on the ground at that spot.</span></span></label>
       <div class="field">
         <label for="mapName">Map name</label>
         <input type="text" id="mapName" placeholder="Filled in for you">
@@ -1710,9 +1710,9 @@ async function startSearch(reuse) {
     if (!kind && !words.length) return show("error", "Choose a kind of place or enter a name in step 1.");
   }
   const key = GOOGLE_API_KEY || $("apiKey").value.trim();
-  const maxDist = Math.max(5, +$("maxDist").value || 25);
+  const maxDist = Math.max(5, +$("maxDist").value || 50);
   const minDist = Math.max(0, +$("minDist").value || 0);
-  const target = Math.max(1, Math.floor(+$("target").value || 500));
+  const target = Math.max(1, Math.floor(+$("target").value || 1000));
   const official = $("official").checked, addTags = $("tags").checked, addCountry = $("tagCountry").checked, addName = $("tagName").checked, addRoad = $("tagRoad").checked;
   const sc = scope(), label = ownRun ? ownRun.label : searchLabel();
   const codes = ownRun || sc === "world" ? null : sc === "cov" ? [...COVERAGE] : [...selected];

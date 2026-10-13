@@ -13,7 +13,7 @@ const els = [{type:'area',id:1,tags:{'ISO3166-1':'MT'}}, N(1,35.90,14.50,'Near')
     return r.fulfill({status:204, body:''}); });
   const done = () => p.waitForFunction(() => !running && !/Ready/.test(document.getElementById('now').textContent));
   const names = () => p.evaluate(() => results.map(r => r.poi.name).sort().join(','));
-  await p.goto('file://'+path.resolve(__dirname,'../dist/index.nokey.html')); await p.fill('#apiKey','KEY'); await p.fill('#kind','Lighthouse'); await p.keyboard.press('Enter');
+  await p.goto('file://'+path.resolve(__dirname,'../dist/index.nokey.html')); await p.fill('#maxDist','25'); await p.fill('#apiKey','KEY'); await p.fill('#kind','Lighthouse'); await p.keyboard.press('Enter');
   await p.check('input[name=scope][value=pick]'); await p.check('#countries input[value=MT]');
   ok(await p.isHidden('#againBox'), 'recheck button hidden before any search');
   await p.click('#go'); await done();
