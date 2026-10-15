@@ -9,7 +9,8 @@
     "test": "node tests/run.js",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "lint": "eslint ."
+    "lint": "eslint .",
+    "icons": "node tools/icons.js"
   },
   "engines": {
     "node": ">=20"

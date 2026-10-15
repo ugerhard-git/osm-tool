@@ -33,7 +33,7 @@ export default [
     languageOptions: { sourceType: "script", globals: { ...globals.browser, ...pageGlobals } },
   },
   {
-    files: ["src/build.js", "src/catalog.js", "tests/**/*.js"],
+    files: ["src/build.js", "src/catalog.js", "tests/**/*.js", "tools/**/*.js"],
     languageOptions: { sourceType: "commonjs", globals: { ...globals.node } },
   },
   {

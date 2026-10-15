@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <!-- Lookout's icon: a Street View camera (bottom left) whose view (amber) falls on a place (white dot).
+       Same colours and shapes as the found locations on the map. After editing, run `npm run icons`. -->
+  <rect width="64" height="64" rx="14" fill="#1d5fd1"/>
+  <path d="M16 48 L28 6 L58 36 Z" fill="#ffd978"/>
+  <path d="M16 48 L34 14 L50 30 Z" fill="#f2a900"/>
+  <circle cx="42" cy="22" r="7.5" fill="#fff"/>
+  <circle cx="16" cy="48" r="9" fill="#f2a900" stroke="#14213d" stroke-width="3"/>
+</svg>

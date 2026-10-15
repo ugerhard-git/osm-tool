@@ -17,6 +17,7 @@ Lookout is a single web page with no server of its own. Everything happens in th
 | ---------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `src/page.html`  | The markup, the site owner settings (Google key, default countries) and placeholders such as `/*APP_JS*/` that the build fills in.                                          |
 | `src/style.css`  | The styles.                                                                                                                                                                 |
+| `src/icon.svg`   | The page icon. `npm run icons` (`tools/icons.js`) makes `icon-32.png` and `icon-180.png` from it for Safari and phones; the build puts all three into the page.             |
 | `src/app.js`     | All app code. Starts with an overview of how a search runs, the shared state and what is saved in the browser.                                                              |
 | `src/catalog.js` | Builds the place catalogue (names and search words in five languages) from the iD editor presets.                                                                           |
 | `src/build.js`   | Puts everything into one file, `dist/index.html`: markup, styles, app code, catalogue, Leaflet and the font. Then fingerprints the scripts for the Content Security Policy. |

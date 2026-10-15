@@ -22,6 +22,14 @@ if (/\/\*(CATALOG|LEAFLET_JS|LEAFLET_CSS|FONT_CSS|CSP)\*\//.test(appCss + appJs)
 put("/*APP_CSS*/", appCss);
 put("/*APP_JS*/", appJs);
 
+// The icon, as data: addresses (the security policy allows images from data:). The PNG versions are
+// made from icon.svg by `npm run icons`.
+const dataUrl = (file, type) =>
+  `data:${type};base64,${fs.readFileSync(path.join(__dirname, file)).toString("base64")}`;
+put("/*ICON_SVG*/", dataUrl("icon.svg", "image/svg+xml"));
+put("/*ICON_PNG*/", dataUrl("icon-32.png", "image/png"));
+put("/*ICON_TOUCH*/", dataUrl("icon-180.png", "image/png"));
+
 // Catalogue data
 put(
   "/*CATALOG*/",

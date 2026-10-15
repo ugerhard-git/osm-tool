@@ -53,6 +53,7 @@ The tests drive the page in a headless browser. OpenStreetMap, taginfo and Googl
 | -------------------- | ------------------------------------------------------------------------------------- |
 | `src/page.html`      | The page's markup and site owner settings                                             |
 | `src/style.css`      | The page's styles                                                                     |
+| `src/icon.svg`       | The page icon; `npm run icons` makes the PNG versions next to it                      |
 | `src/app.js`         | The app code                                                                          |
 | `src/catalog.js`     | Builds the place catalogue from the iD editor presets                                 |
 | `src/build.js`       | Assembles everything into the single file `dist/index.html`, with its security policy |
