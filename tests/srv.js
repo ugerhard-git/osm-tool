@@ -1,3 +1,5 @@
+// Your own Overpass server: checking and testing the address, "first" and "fallback" modes, remembering
+// or forgetting it, and keeping its key out of links, the query panel and error messages.
 const { chromium } = require("./pw.js");
 const { PAGE, isSite, serveSite } = require("./site.js");
 const H = { "access-control-allow-origin": "*" };

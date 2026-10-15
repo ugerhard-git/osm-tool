@@ -1,3 +1,5 @@
+// The first-visit dialog: shown once per browser, closed by the button, the x, Escape or a click
+// outside, reopened by "How it works"; it keeps the keyboard inside while open and gives the focus back.
 const { chromium } = require("playwright");
 const { PAGE, isSite, serveSite } = require("./site.js");
 (async () => {

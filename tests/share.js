@@ -1,3 +1,5 @@
+// "Copy a link to this search": the link carries the settings but never the key, the recipient sees the
+// same settings and nothing runs until they start it, and hostile or broken links are refused or clamped.
 const { chromium } = require("./pw.js");
 const { PAGE, isSite, serveSite } = require("./site.js");
 const H = { "access-control-allow-origin": "*" };

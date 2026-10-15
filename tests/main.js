@@ -1,3 +1,6 @@
+// The main walk through the app: suggestions while typing, the query, a full search with results on
+// the map, popups and missed places, the export file and its tags, saved settings, languages, the
+// name filter and the phone layout. Also the shared setup for answering OpenStreetMap, taginfo and Google.
 const { chromium } = require("./pw.js");
 const { SITE, PAGE, isSite, serveSite } = require("./site.js");
 const fs = require("fs"),

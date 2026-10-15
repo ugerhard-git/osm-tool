@@ -1,3 +1,5 @@
+// The "Has road name" / "No road name" tag: read from the labels Google's script gives for neighbouring
+// panoramas. No tag, and a note, when Google gives no answer or its script cannot be loaded.
 const { chromium } = require("./pw.js");
 const { PAGE, isSite, serveSite } = require("./site.js");
 const H = { "access-control-allow-origin": "*" };

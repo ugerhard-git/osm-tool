@@ -1,3 +1,5 @@
+// The list of named locations beside the map: sorting, the filter, showing a location on the map,
+// removing it and undoing that.
 const { chromium } = require("./pw.js");
 const { PAGE, isSite, serveSite } = require("./site.js");
 const H = { "access-control-allow-origin": "*" };

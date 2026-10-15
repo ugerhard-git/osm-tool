@@ -1,3 +1,5 @@
+// Large searches in parts: countries are asked a few at a time, a part that is too big is split, a
+// country that still fails is skipped and named, and the search waits when the servers ask it to slow down.
 const { chromium } = require("./pw.js");
 const { PAGE, isSite, serveSite } = require("./site.js");
 const H = { "access-control-allow-origin": "*" };

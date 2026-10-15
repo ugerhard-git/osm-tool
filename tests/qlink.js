@@ -1,3 +1,5 @@
+// Shared links in the address: query links (?k=…), older # links, links with parameters that no longer
+// exist, a host's own extra parameters, and a link opened on a first visit behind the welcome dialog.
 const { chromium } = require("playwright");
 const { PAGE, isSite, serveSite } = require("./site.js");
 (async () => {
