@@ -1,3 +1,5 @@
+// Using your own Overpass result instead of searching: pasted text or a file, the format checks and
+// their messages, the summary, and going back to a normal search.
 const { chromium } = require("./pw.js");
 const { PAGE, isSite, serveSite } = require("./site.js");
 const path = require("path");

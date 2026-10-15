@@ -1,3 +1,5 @@
+// "Check Street View again on the same places": reruns only the Street View step on the places of the
+// last OpenStreetMap search, with new settings, and keeps those places when step 1 changes.
 const { chromium } = require("./pw.js");
 const { PAGE, isSite, serveSite } = require("./site.js");
 const H = { "access-control-allow-origin": "*" };

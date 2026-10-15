@@ -1,3 +1,8 @@
+// Builds the published page, dist/index.html, from the files in src/. It fills the placeholders in
+// page.html (such as /*APP_JS*/) with the styles, the app code, the place catalogue, Leaflet, the font
+// and the icon, then fingerprints the scripts for the Content Security Policy. The Google key comes
+// from the GOOGLE_API_KEY environment variable; dist/index.nokey.html is the same page without it,
+// for the tests. Run with `npm run build`.
 const fs = require("fs"),
   path = require("path"),
   crypto = require("crypto");
@@ -6,8 +11,11 @@ const out = path.join(__dirname, "../dist");
 fs.mkdirSync(out, { recursive: true });
 const cat = require("./catalog.js");
 let tpl = fs.readFileSync(path.join(__dirname, "page.html"), "utf8");
+// Fills in one placeholder. Each must appear exactly once in page.html: a second copy (in a comment,
+// say) would get the content instead of the real spot, and the page would break.
 const put = (mark, text) => {
-  if (!tpl.includes(mark)) throw new Error("placeholder missing: " + mark);
+  const n = tpl.split(mark).length - 1;
+  if (n !== 1) throw new Error(`placeholder ${mark} appears ${n} times in page.html; it must appear once`);
   tpl = tpl.replace(mark, () => text);
 };
 

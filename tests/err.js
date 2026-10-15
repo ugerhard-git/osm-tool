@@ -1,3 +1,5 @@
+// Error messages: for every way an OpenStreetMap request can fail (timeout, memory, rate limit, busy,
+// no connection, rejected query, unreadable answer, …), the error card says what happened in plain words.
 const { chromium } = require("./pw.js");
 const { PAGE, isSite, serveSite } = require("./site.js");
 const H = { "access-control-allow-origin": "*" };

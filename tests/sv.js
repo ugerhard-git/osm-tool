@@ -1,3 +1,5 @@
+// Street View lookups: the second, official-only look (through Google's script, or by probing points
+// around the place when the script cannot be used), and the reason recorded for every failed lookup.
 const { chromium } = require("./pw.js");
 const { PAGE, isSite, serveSite } = require("./site.js");
 const H = { "access-control-allow-origin": "*" };

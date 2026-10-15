@@ -25,10 +25,23 @@ Add a test file or cases in `tests/` for new behaviour.
 ## How the code is organised
 
 - The app is published as a single page, built from `src/page.html` (markup), `src/style.css` and `src/app.js`. Edit those (and `src/catalog.js` / `src/build.js` for build changes); never edit `dist/`.
-- `docs/how-the-code-works.md` describes the structure. Keep it, the overview at the top of `src/app.js` and the section names in the three source files up to date.
 - Tests simulate every outside service (Overpass, taginfo, Google) with Playwright routes. They load the page from `PAGE` (`tests/site.js`), not file://, and answer its requests with `isSite`/`serveSite`.
 - `tests/pw.js` pre-dismisses the first-visit welcome dialog; use it unless the test is about that dialog.
 - Interface text: plain language for non-technical users, sentence case, no jargon.
+
+## Code for people
+
+The code is read by the owner and by developers who don't know the project. Write it so they can follow it without help.
+
+- **Clear before clever.** Choose the plain version over the shortest or fastest one, unless the speed matters and a comment says why.
+- **Every file explains itself.** Start with a short comment on what the file does. In `src/app.js`, the overview at the top covers how a search runs, the shared state and what is saved in the browser.
+- **Comments say why, not what.** Explain decisions, limits and edge cases ("wait 20 s: the servers asked to slow down"); the code already shows what it does.
+- **Keep to the sections.** `app.js` is one file, split into sections with the same names as in `page.html` and `style.css`. Put new code in the section it belongs to. Functions that only compute (such as `buildQuery`, `parseOwn`, `distance`) don't touch the page, so they can be tested on their own.
+- **Names a reader understands:** whole words, matching the interface where possible, no private abbreviations.
+- **Type notes (JSDoc)** on shared data shapes and central functions, so editors can help.
+- **Follow the existing patterns.** Reuse the helpers (`$`, `store`, `esc`, `cleanText`, `makeElement`) before writing new ones.
+- **No new tools without a reason.** Every dependency or build step is one more thing to learn; propose it to the owner first.
+- **Keep the documentation true.** When the code changes, update its comments, the overview in `app.js`, `docs/how-the-code-works.md` and `README.md` in the same pull request.
 
 ## Things that must not break
 
