@@ -79,6 +79,12 @@ npm test -- share     # only files whose name starts with "share"
 
 Each test file prints `PASS …` or `FAIL …` lines and ends with `ALL PASS`. Screenshots of some states are saved in `dist/screens/`. To test something new, copy the setup of a test file close to your feature: it shows how to answer the page's requests to Overpass, taginfo or Google with made-up data.
 
+When writing a test:
+
+- **Load the page from `PAGE`** (`tests/site.js`), not from disk (`file://`). Answer its requests with `isSite`/`serveSite` and simulate every outside service with Playwright routes, so the tests run offline and need no key.
+- **Start Playwright from `tests/pw.js`**, which dismisses the first-visit welcome dialog, unless the test is about that dialog.
+- **End with `ALL PASS`** when every check held; `tests/run.js` looks for it.
+
 ## Updates
 
 Dependabot (settings in `.github/dependabot.yml`) proposes updates once a month, as pull requests:
