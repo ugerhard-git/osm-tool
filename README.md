@@ -4,6 +4,8 @@ Lookout builds maps for [map-making.app](https://map-making.app) and GeoGuessr: 
 
 It runs entirely in the browser as a single HTML page. There is no server of its own.
 
+**Use it here: [ugerhard-git.github.io/osm-tool](https://ugerhard-git.github.io/osm-tool/)**
+
 ## How it works
 
 1. **Find the places.** The kind of place (an OpenStreetMap tag such as `man_made=lighthouse`, chosen through a searchable catalogue in English, German, French, Spanish and Portuguese) and optional name words are turned into an [Overpass API](https://wiki.openstreetmap.org/wiki/Overpass_API) query. Country searches are sent in parts, a few countries at a time; parts that time out are split and retried.
