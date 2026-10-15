@@ -32,7 +32,9 @@ const page = path.resolve(__dirname, "../dist/index.nokey.html");
     "no libraries or fonts from CDNs",
   );
   ok(
-    !/\/\*(APP_CSS|APP_JS|CATALOG|LEAFLET_JS|LEAFLET_CSS|FONT_CSS|CSP)\*\//.test(html),
+    !/\/\*(APP_CSS|APP_JS|CATALOG|LEAFLET_JS|LEAFLET_CSS|FONT_CSS|CSP|ICON_SVG|ICON_PNG|ICON_TOUCH)\*\//.test(
+      html,
+    ),
     "every build placeholder filled in",
   );
   ok(
