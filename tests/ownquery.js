@@ -1,7 +1,7 @@
 // "Run your own query" in the expert panel: the query is sent to the configured servers and its answer
 // is used like a loaded Overpass result. Covers adding [out:json], refusing other formats, a full run to
-// the export, "Start from Lookout's query", errors with "Try again", an empty answer, Stop, the
-// remembered query and the user's own server being asked first.
+// the export, "Start from Lookout's query", "Also check Street View", errors with "Try
+// again", an empty answer, Stop, the remembered query and tick, and the user's own server asked first.
 const { chromium } = require("./pw.js");
 const { PAGE, isSite, serveSite } = require("./site.js");
 const H = { "access-control-allow-origin": "*" };
@@ -181,6 +181,20 @@ const MALTA = [
   );
   state.answer = "ok";
 
+  // "Also check Street View": the query's places go straight on to Street View
+  ok(!(await p.isChecked("#ownQueryAuto")), '"Also check Street View" is off at first');
+  await p.check("#ownQueryAuto");
+  const sentAuto = state.sent.length;
+  await p.click("#ownQueryRun");
+  await p.waitForFunction(() => !running && /Done/.test(document.getElementById("now").textContent));
+  ok(
+    (await p.evaluate(() => results.length)) === 2 &&
+      state.sent.length === sentAuto + 1 &&
+      /from your query/.test(await p.textContent("#ownSummary")),
+    "with the box ticked, Street View is checked without selecting Find locations; OpenStreetMap asked once",
+  );
+  await p.click("#ownRemove");
+
   // the query is remembered, and your own server is asked first
   await p.evaluate(() =>
     localStorage.setItem(
@@ -190,7 +204,11 @@ const MALTA = [
   );
   await p.reload();
   await p.waitForLoadState("load");
-  ok((await p.inputValue("#ownQuery")) === mine, "the query is remembered in this browser");
+  ok(
+    (await p.inputValue("#ownQuery")) === mine && (await p.isChecked("#ownQueryAuto")),
+    "the query and the tick are remembered in this browser",
+  );
+  await p.uncheck("#ownQueryAuto");
   ok(
     await p.evaluate(() => document.getElementById("partQuery").open),
     "the expert section used last opens again",

@@ -426,7 +426,12 @@
               ></textarea>
               <div class="qrow">
                 <button class="btn" type="button" id="ownQueryFromLookout">Start from Lookout's query</button>
-                <button class="btn" type="button" id="ownQueryRun">Run this query</button>
+                <span class="qgroup">
+                  <button class="btn" type="button" id="ownQueryRun">Run this query</button>
+                  <label class="inlinecheck"
+                    ><input type="checkbox" id="ownQueryAuto" />Also check Street View</label
+                  >
+                </span>
               </div>
               <div class="msg error" id="ownQueryError" hidden role="alert"></div>
               <div class="format-slot"></div>
