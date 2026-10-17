@@ -100,7 +100,7 @@ fieldset:disabled {
   font-size: 1.1rem;
 }
 
-/* ---------- "How it works" and the first-visit dialog ---------- */
+/* ---------- "How it works", "Settings" and the dialogs (first-visit welcome, settings) ---------- */
 .howbtn {
   font: inherit;
   border: 0;
@@ -111,7 +111,7 @@ fieldset:disabled {
   padding: 0;
   white-space: nowrap;
 }
-.welcome {
+.dialog {
   position: fixed;
   inset: 0;
   z-index: 3000;
@@ -121,7 +121,7 @@ fieldset:disabled {
   justify-content: center;
   padding: 16px;
 }
-.welcome-box {
+.dialog-box {
   position: relative;
   background: #fff;
   border-radius: 16px;
@@ -132,24 +132,24 @@ fieldset:disabled {
   padding: 28px 30px 26px;
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.35);
 }
-.welcome-box:focus {
+.dialog-box:focus {
   outline: none;
 }
-.welcome-box h2 {
+.dialog-box h2 {
   font-size: 1.7rem;
   font-weight: 800;
   line-height: 1.1;
   margin: 0 34px 12px 0;
   letter-spacing: -0.01em;
 }
-.welcome-box p {
+.dialog-box p {
   margin: 0 0 12px;
 }
-.welcome-box ol {
+.dialog-box ol {
   margin: 0 0 16px;
   padding-left: 1.3em;
 }
-.welcome-box li {
+.dialog-box li {
   margin-bottom: 6px;
 }
 .welcome-warn {
@@ -166,7 +166,7 @@ fieldset:disabled {
   display: block;
   margin-bottom: 2px;
 }
-.welcome-x {
+.dialog-x {
   position: absolute;
   top: 14px;
   right: 14px;
@@ -181,12 +181,29 @@ fieldset:disabled {
   line-height: 1;
   cursor: pointer;
 }
-.welcome-x:hover {
+.dialog-x:hover {
   background: var(--line);
 }
-.welcome-box .btn {
+.dialog-box > .btn {
   padding: 11px 26px;
   font-size: 1.05rem;
+}
+.dialog-box h3 {
+  font-size: 1.1rem;
+  margin: 4px 0 6px;
+}
+.dialog-box label {
+  margin-top: 10px;
+}
+.dialog-box > .btn.primary {
+  margin-top: 14px;
+}
+/* "How it works" and "Settings", on their own line under the introduction */
+.toplinks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 18px;
+  margin: -16px 0 26px;
 }
 
 /* ---------- steps and form fields ---------- */
@@ -520,7 +537,7 @@ a:focus-visible {
   border-bottom: 1px solid var(--line);
 }
 
-/* ---------- help boxes and the expert panel (query, own server, own result) ---------- */
+/* ---------- help boxes and the expert panel (Lookout's query, your own query, a loaded result) ---------- */
 details.help {
   margin-top: 14px;
   border: 1.5px solid var(--line);
@@ -544,6 +561,41 @@ details.help h3 {
 details.help p {
   margin: 0 0 8px;
 }
+/* The three parts of the expert panel: fold-outs, one open at a time */
+details.part {
+  border-top: 1px solid var(--line);
+}
+details.part:first-of-type {
+  margin-top: 6px;
+}
+details.part > summary {
+  cursor: pointer;
+  font-weight: 700;
+  color: var(--ink);
+  padding: 10px 0;
+}
+details.part[open] > summary {
+  padding-bottom: 6px;
+}
+details.part[open] {
+  padding-bottom: 12px;
+}
+/* "Format requirements", inside two of the parts */
+details.fmt {
+  margin-top: 10px;
+  font-size: 0.9rem;
+}
+details.fmt > summary {
+  cursor: pointer;
+  color: var(--blue-dark);
+}
+details.fmt ul {
+  margin: 6px 0 0;
+  padding-left: 1.2em;
+}
+details.fmt li {
+  margin-bottom: 4px;
+}
 code {
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   font-size: 0.88em;
@@ -551,7 +603,8 @@ code {
   padding: 1px 5px;
   border-radius: 4px;
 }
-#queryText {
+#queryText,
+#ownQuery {
   width: 100%;
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   font-size: 0.8rem;

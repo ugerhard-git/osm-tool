@@ -50,16 +50,16 @@
       <p><a id="framedLink" href="./" target="_top" rel="noopener">Open Lookout on its own</a></p>
     </div>
     <!-- First-visit dialog, also opened by "How it works" (app.js: welcome) -->
-    <div class="welcome" id="welcome" hidden>
+    <div class="dialog" id="welcome" hidden>
       <div
-        class="welcome-box"
+        class="dialog-box"
         id="welcomeBox"
         role="dialog"
         aria-modal="true"
         aria-labelledby="welcomeTitle"
         tabindex="-1"
       >
-        <button type="button" class="welcome-x" id="welcomeX" aria-label="Close">×</button>
+        <button type="button" class="dialog-x" id="welcomeX" aria-label="Close">×</button>
         <h2 id="welcomeTitle">Welcome to Lookout</h2>
         <p>
           Lookout builds a map of Street View locations that stand near one kind of place and face it: every
@@ -93,14 +93,80 @@
         <button type="button" class="btn primary" id="welcomeOk">Start</button>
       </div>
     </div>
+    <!-- Settings dialog, opened by "Settings" next to "How it works" (app.js: settings, your own Overpass server) -->
+    <div class="dialog" id="settings" hidden>
+      <div
+        class="dialog-box"
+        id="settingsBox"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="settingsTitle"
+        tabindex="-1"
+      >
+        <button type="button" class="dialog-x" id="settingsX" aria-label="Close">×</button>
+        <h2 id="settingsTitle">Settings</h2>
+        <h3>Your own Overpass server</h3>
+        <p>
+          If you have access to a paid or private Overpass server, enter its address here, including your key.
+          Examples: <code>https://tile.tracestrack.com/overpass/YOUR-KEY/</code> or
+          <code>https://overpass.geofabrik.de/YOUR-KEY/api/interpreter</code>. The page tests the address
+          before using it.
+        </p>
+        <label for="srvUrl">Server address with key</label>
+        <input
+          type="text"
+          id="srvUrl"
+          placeholder="https://…"
+          spellcheck="false"
+          autocomplete="off"
+          autocapitalize="off"
+        />
+        <label class="radio srv"
+          ><input type="radio" name="srvMode" value="first" checked /><span
+            ><b>Use it for every search</b><br /><span class="hint"
+              >The public servers are only tried if it fails.</span
+            ></span
+          ></label
+        >
+        <label class="radio srv"
+          ><input type="radio" name="srvMode" value="fallback" /><span
+            ><b>Use it only as a fallback</b><br /><span class="hint"
+              >The public servers are tried first; yours steps in when they time out or report an error.</span
+            ></span
+          ></label
+        >
+        <label class="check"
+          ><input type="checkbox" id="srvRemember" checked /><span
+            >Remember this server in this browser<br /><span class="hint"
+              >If unticked, it is kept only until you close this tab.</span
+            ></span
+          ></label
+        >
+        <div class="qrow">
+          <button class="btn" type="button" id="srvSave">Test and use this server</button>
+          <button class="btn" type="button" id="srvForget" hidden>Forget this server</button>
+        </div>
+        <div class="picked" id="srvStatus" hidden></div>
+        <div class="msg error" id="srvError" hidden role="alert"></div>
+        <p class="hint">
+          The address contains your key. It stays in this browser, is sent only to that server, and is never
+          put into a shared link.
+        </p>
+        <button type="button" class="btn primary" id="settingsOk">Done</button>
+      </div>
+    </div>
     <!-- The app: settings panel on the left, map on the right (stacked on phones) -->
     <div class="app">
       <form class="panel" id="form" autocomplete="off">
         <h1>Lookout</h1>
         <p class="lede">
           Build a map of Street View spots that stand near one kind of place and face it. Import the result
-          into map-making.app. <button type="button" class="howbtn" id="howBtn">How it works</button>
+          into map-making.app.
         </p>
+        <div class="toplinks">
+          <button type="button" class="howbtn" id="howBtn">How it works</button>
+          <button type="button" class="howbtn" id="settingsBtn">Settings</button>
+        </div>
 
         <fieldset id="fields">
           <!-- Step 1 when an own Overpass result is loaded; replaces steps 1 and 2 (app.js: your own Overpass result) -->
@@ -317,113 +383,103 @@
         <button class="sharebtn" id="share" type="button">Copy a link to this search</button>
         <div id="message" class="msg" hidden role="alert"></div>
 
-        <!-- Expert panel: the Overpass query, own server, own result (app.js: step 2, your own Overpass server, your own Overpass result) -->
+        <!-- Expert panel: Lookout's query, your own query, a loaded result (app.js: step 2, your own query, your own Overpass result) -->
         <details class="help" id="expert">
           <summary>Expert</summary>
           <div class="body">
-            <h3>The query</h3>
-            <p>
-              The Overpass query for the settings in steps 1 and 2. It updates as you change them. Results
-              come grouped by country: each country's area is followed by its places. The page itself sends
-              this query in several parts, a few countries at a time.
-            </p>
-            <textarea
-              id="queryText"
-              readonly
-              rows="9"
-              spellcheck="false"
-              aria-label="Overpass query"
-            ></textarea>
-            <div class="qrow">
-              <button class="btn" type="button" id="copyQuery">Copy query</button>
-              <a id="turbo" href="https://overpass-turbo.eu/" target="_blank" rel="noopener"
-                >Open in Overpass Turbo</a
-              >
-            </div>
+            <p class="hint">Three ways to work with OpenStreetMap queries yourself. Open the one you need.</p>
 
-            <h3>Use your own Overpass server</h3>
-            <p>
-              If you have access to a paid or private Overpass server, enter its address here, including your
-              key. Examples: <code>https://tile.tracestrack.com/overpass/YOUR-KEY/</code> or
-              <code>https://overpass.geofabrik.de/YOUR-KEY/api/interpreter</code>. The page tests the address
-              before using it.
-            </p>
-            <label for="srvUrl">Server address with key</label>
-            <input
-              type="text"
-              id="srvUrl"
-              placeholder="https://…"
-              spellcheck="false"
-              autocomplete="off"
-              autocapitalize="off"
-            />
-            <label class="radio srv"
-              ><input type="radio" name="srvMode" value="first" checked /><span
-                ><b>Use it for every search</b><br /><span class="hint"
-                  >The public servers are only tried if it fails.</span
-                ></span
-              ></label
-            >
-            <label class="radio srv"
-              ><input type="radio" name="srvMode" value="fallback" /><span
-                ><b>Use it only as a fallback</b><br /><span class="hint"
-                  >The public servers are tried first; yours steps in when they time out or report an
-                  error.</span
-                ></span
-              ></label
-            >
-            <label class="check"
-              ><input type="checkbox" id="srvRemember" checked /><span
-                >Remember this server in this browser<br /><span class="hint"
-                  >If unticked, it is kept only until you close this tab.</span
-                ></span
-              ></label
-            >
-            <div class="qrow">
-              <button class="btn" type="button" id="srvSave">Test and use this server</button>
-              <button class="btn" type="button" id="srvForget" hidden>Forget this server</button>
-            </div>
-            <div class="picked" id="srvStatus" hidden></div>
-            <div class="msg error" id="srvError" hidden role="alert"></div>
-            <p class="hint">
-              The address contains your key. It stays in this browser, is sent only to that server, and is
-              never put into a shared link.
-            </p>
+            <details class="part" id="partTurbo">
+              <summary>The query for Overpass Turbo</summary>
+              <p>
+                The query Lookout builds from steps 1 and 2. It updates as you change them. Copy it, or open
+                it in Overpass Turbo to look at the places or change the query there.
+              </p>
+              <textarea
+                id="queryText"
+                readonly
+                rows="9"
+                spellcheck="false"
+                aria-label="Overpass query"
+              ></textarea>
+              <div class="qrow">
+                <button class="btn" type="button" id="copyQuery">Copy query</button>
+                <a id="turbo" href="https://overpass-turbo.eu/" target="_blank" rel="noopener"
+                  >Open in Overpass Turbo</a
+                >
+              </div>
+            </details>
 
-            <h3>Use your own Overpass result</h3>
-            <p>
-              Run any query in Overpass Turbo and load its result here. The page then skips its own
-              OpenStreetMap search and only checks Street View near your places.
-            </p>
-            <p>
-              <b>Only one format is accepted: raw OSM data as JSON.</b> In Overpass Turbo choose Export, then
-              Data, then "raw OSM data". The query must start with <code>[out:json]</code> and should end with
-              <code>out center;</code> so that outlines get a position. GeoJSON, GPX, KML and XML files are
-              not accepted.
-            </p>
-            <p>
-              Country codes and country tags are kept only if the query has the country grouping of the query
-              above. The file is read in your browser and is not sent anywhere.
-            </p>
-            <div class="drop" id="ownDrop">
-              <label class="btn" for="ownFile">Choose a file</label>
-              <input
-                type="file"
-                id="ownFile"
-                accept=".json,.txt,.osm,application/json,text/plain"
-                class="visually-hidden"
-              />
-              <span class="hint">or drop it here</span>
-            </div>
-            <textarea
-              id="ownText"
-              rows="4"
-              spellcheck="false"
-              placeholder="…or paste the raw OSM data here"
-              aria-label="Paste raw OSM data"
-            ></textarea>
-            <div class="qrow"><button class="btn" type="button" id="ownUse">Use the pasted text</button></div>
-            <div class="msg error" id="ownError" hidden role="alert"></div>
+            <details class="part" id="partQuery">
+              <summary>Run your own query</summary>
+              <p>
+                Write an Overpass query and run it here, without leaving Lookout. It goes to the same servers
+                as a normal search, including your own server if one is set under Settings. Lookout then only
+                checks Street View near the places it finds.
+              </p>
+              <textarea
+                id="ownQuery"
+                rows="7"
+                spellcheck="false"
+                aria-label="Your own Overpass query"
+                placeholder='For example:&#10;[out:json][timeout:120];&#10;nwr["historic"="castle"](47.2,5.8,55.1,15.1);&#10;out center;'
+              ></textarea>
+              <div class="qrow">
+                <button class="btn" type="button" id="ownQueryFromLookout">Start from Lookout's query</button>
+                <button class="btn" type="button" id="ownQueryRun">Run this query</button>
+              </div>
+              <div class="msg error" id="ownQueryError" hidden role="alert"></div>
+              <div class="format-slot"></div>
+            </details>
+
+            <details class="part" id="partLoad">
+              <summary>Load a result from Overpass Turbo</summary>
+              <p>
+                In Overpass Turbo, choose Export, then Data, then "raw OSM data", and load the file here.
+                Lookout then only checks Street View near your places. The file stays in your browser.
+              </p>
+              <div class="drop" id="ownDrop">
+                <label class="btn" for="ownFile">Choose a file</label>
+                <input
+                  type="file"
+                  id="ownFile"
+                  accept=".json,.txt,.osm,application/json,text/plain"
+                  class="visually-hidden"
+                />
+                <span class="hint">or drop it here</span>
+              </div>
+              <textarea
+                id="ownText"
+                rows="4"
+                spellcheck="false"
+                placeholder="…or paste the raw OSM data here"
+                aria-label="Paste raw OSM data"
+              ></textarea>
+              <div class="qrow">
+                <button class="btn" type="button" id="ownUse">Use the pasted text</button>
+              </div>
+              <div class="msg error" id="ownError" hidden role="alert"></div>
+              <div class="format-slot"></div>
+            </details>
+
+            <!-- Shown in "Run your own query" and "Load a result": app.js copies it into each .format-slot -->
+            <template id="formatHelp">
+              <details class="fmt">
+                <summary>Format requirements</summary>
+                <ul>
+                  <li>Only raw OSM data as JSON can be read. GeoJSON, GPX, KML and XML are not accepted.</li>
+                  <li>
+                    The query starts with <code>[out:json]</code>. When you run a query here, it is added if
+                    missing.
+                  </li>
+                  <li>End the query with <code>out center;</code> so that outlines get a position.</li>
+                  <li>
+                    Each place gets its country: from the country grouping of Lookout's query if the result
+                    has it, otherwise from where the place is.
+                  </li>
+                </ul>
+              </details>
+            </template>
           </div>
         </details>
 

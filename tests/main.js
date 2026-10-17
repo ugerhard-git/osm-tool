@@ -384,6 +384,30 @@ const done = page =>
       'expert panel heading is just "Expert"',
     );
     await page.click("#expert summary");
+    ok(
+      JSON.stringify(
+        await page.$$eval("#expert details.part > summary", x => x.map(e => e.textContent.trim())),
+      ) === '["The query for Overpass Turbo","Run your own query","Load a result from Overpass Turbo"]' &&
+        (await page.$$eval("#expert details.part", x => x.every(d => !d.open))),
+      "expert panel: three sections, all closed at first",
+    );
+    await page.click("#partQuery summary");
+    await page.click("#partTurbo summary");
+    await page
+      .waitForFunction(() => !document.getElementById("partQuery").open, null, { timeout: 2000 })
+      .catch(() => {});
+    ok(
+      (await page.evaluate(() => document.getElementById("partTurbo").open)) &&
+        !(await page.evaluate(() => document.getElementById("partQuery").open)),
+      "only one section open at a time",
+    );
+    ok(
+      (await page.$$eval("#expert details.fmt", x => x.length)) === 2 &&
+        (await page.$eval("#partQuery .fmt", e => e.textContent)) ===
+          (await page.$eval("#partLoad .fmt", e => e.textContent)) &&
+        !(await page.$("#partTurbo .fmt")),
+      "format requirements shown in the query and load sections, from the same text",
+    );
     const qt = await page.inputValue("#queryText");
     console.log(qt.replace(/\(AD\|.*ZA\)/, "(AD|…|ZA)"));
     ok(
