@@ -551,7 +551,8 @@ code {
   padding: 1px 5px;
   border-radius: 4px;
 }
-#queryText {
+#queryText,
+#ownQuery {
   width: 100%;
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   font-size: 0.8rem;

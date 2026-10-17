@@ -341,6 +341,30 @@
               >
             </div>
 
+            <h3>Run your own query</h3>
+            <p>
+              Write an Overpass query, or start from the one above and change it. It is sent to the
+              OpenStreetMap servers (and to your own server, if you set one below). Its places are then used
+              like a loaded Overpass result: the page skips its own search and only checks Street View near
+              them.
+            </p>
+            <p>
+              The answer must be raw OSM data as JSON: <code>[out:json]</code> is added if the query does not
+              say. End the query with <code>out center;</code> so that outlines get a position.
+            </p>
+            <textarea
+              id="ownQuery"
+              rows="7"
+              spellcheck="false"
+              aria-label="Your own Overpass query"
+              placeholder='For example:&#10;[out:json][timeout:120];&#10;nwr["historic"="castle"](47.2,5.8,55.1,15.1);&#10;out center;'
+            ></textarea>
+            <div class="qrow">
+              <button class="btn" type="button" id="ownQueryFromAbove">Start from the query above</button>
+              <button class="btn" type="button" id="ownQueryRun">Run this query</button>
+            </div>
+            <div class="msg error" id="ownQueryError" hidden role="alert"></div>
+
             <h3>Use your own Overpass server</h3>
             <p>
               If you have access to a paid or private Overpass server, enter its address here, including your
@@ -402,8 +426,8 @@
               not accepted.
             </p>
             <p>
-              Country codes and country tags are kept only if the query has the country grouping of the query
-              above. The file is read in your browser and is not sent anywhere.
+              Each place gets its country: from the country grouping of the query above if the result has it,
+              otherwise from where the place is. The file is read in your browser and is not sent anywhere.
             </p>
             <div class="drop" id="ownDrop">
               <label class="btn" for="ownFile">Choose a file</label>

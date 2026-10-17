@@ -14,8 +14,9 @@
  *   2. buildQuery() writes the Overpass query. fetchPlaces() sends it in parts of a few countries
  *      (makeParts, halve) through overpass(), which tries the public servers and the user's own server.
  *      mergeElements() turns the answers into Place objects.
- *      Instead of steps 1 and 2, the user can load their own Overpass result (parseOwn), or check the
- *      places of the previous search again with other settings (lastFetch).
+ *      Instead of steps 1 and 2, the user can load their own Overpass result (parseOwn), run their own
+ *      query (runOwnQuery; its answer is read the same way), or check the places of the previous search
+ *      again with other settings (lastFetch).
  *   3. The places are shuffled, then lookup() asks Google for the nearest panorama of each one.
  *      officialNearby() looks again when the nearest panorama is a photo uploaded by someone else, and
  *      roadInfo() checks for a street name when that tag is wanted.
@@ -34,7 +35,8 @@
  *
  * SAVED IN THE BROWSER (localStorage, each name starts with "lookout2.", see `store`)
  *   kind, nameHas, lang, countries, scope, maxDist, minDist, target, official, tagCountry, tagRoad,
- *   expert (whether that panel is open) and welcomed (first-visit dialog seen).
+ *   expert (whether that panel is open), ownQuery (the text of your own query) and welcomed
+ *   (first-visit dialog seen).
  *   The own server is "lookout2.osmOwn" in localStorage or, if not remembered, sessionStorage.
  *   A visitor's own Google key is only kept in sessionStorage ("lookout2.key"), never on disk.
  *   Saved values and shared links can be edited by anyone, so everything read back is checked first.
@@ -1109,22 +1111,26 @@ function loadOwn(raw, source) {
   err.hidden = true;
   if (running) return;
   try {
-    ownResult = { ...parseOwn(raw), source };
-    if (!$("ownLabel").value.trim())
-      $("ownLabel").value = /\.\w+$/.test(source)
-        ? source
-            .replace(/\.\w+$/, "")
-            .replace(/[_-]+/g, " ")
-            .slice(0, 80)
-        : "";
+    useOwn(parseOwn(raw), source);
     $("ownText").value = "";
-    show("", "");
-    renderOwn();
-    $("ownStep").scrollIntoView({ block: "start" });
   } catch (e) {
     err.textContent = e.message;
     err.hidden = false;
   }
+}
+/* Makes a parsed own result (from a file, pasted text or your own query) the places to check. */
+function useOwn(parsed, source) {
+  ownResult = { ...parsed, source };
+  if (!$("ownLabel").value.trim())
+    $("ownLabel").value = /\.\w+$/.test(source)
+      ? source
+          .replace(/\.\w+$/, "")
+          .replace(/[_-]+/g, " ")
+          .slice(0, 80)
+      : "";
+  show("", "");
+  renderOwn();
+  $("ownStep").scrollIntoView({ block: "start" });
 }
 async function loadOwnFile(file) {
   const err = $("ownError");
@@ -1171,6 +1177,128 @@ $("ownLabel").oninput = suggestName;
   };
 }
 const ownLabel = () => $("ownLabel").value.trim().slice(0, 80) || "My places";
+
+/* ---------- your own query ----------
+   A query written in the expert panel is sent to the same servers as a normal search (your own server
+   first or as a fallback, as set), and its answer is used like a loaded Overpass result. */
+const OWN_QUERY_MAX = 20000; // characters; longer is almost certainly a paste gone wrong
+const OWN_QUERY_TIMEOUT_MAX = 900; // seconds a query may ask the server for, at most
+/* The query ready to send: [out:json] is added when no output format is given. Throws a readable
+   message for an empty, overlong or non-JSON query. Returns { query, seconds }. */
+function prepareOwnQuery(text) {
+  let q = String(text).trim();
+  if (!q) throw new Error('Write a query first, or select "Start from the query above".');
+  if (q.length > OWN_QUERY_MAX)
+    throw new Error(`The query is longer than ${fmt(OWN_QUERY_MAX)} characters. Shorten it and try again.`);
+  const out = /\[out:(\w+)/.exec(q);
+  if (out && out[1] !== "json")
+    throw new Error(
+      `The query asks for [out:${out[1]}]. Change it to [out:json]: only JSON answers can be read here.`,
+    );
+  // Settings such as [timeout:…] go in the first statement; add [out:json] to it, or start one.
+  if (!out) q = q.startsWith("[") ? "[out:json]" + q : "[out:json][timeout:180];\n" + q;
+  const t = /\[timeout:(\d+)\]/.exec(q);
+  const seconds = Math.min(OWN_QUERY_TIMEOUT_MAX, t ? +t[1] : 180);
+  return { query: q, seconds };
+}
+/* Plain-language title and advice when your own query fails. */
+function explainOwnQuery(e) {
+  switch (e.kind) {
+    case "timeout":
+      return [
+        "Your query ran out of time",
+        "The server stopped before your query finished. Search a smaller area or fewer kinds of place, or allow more time with [timeout:…] in the first line.",
+      ];
+    case "memory":
+      return [
+        "Your query was too large for OpenStreetMap",
+        "The answer needed more memory than the server allows. Search a smaller area or fewer kinds of place.",
+      ];
+    case "syntax":
+      return [
+        "OpenStreetMap could not read your query",
+        "There is a mistake in the query. The technical details show the server's message, with the line where it found the problem.",
+      ];
+    case "rate":
+      return [
+        "OpenStreetMap is limiting your requests",
+        'The free servers accept only a few searches from one person in a short time. Wait a minute or two, then select "Try again".',
+      ];
+    case "busy":
+      return [
+        "The OpenStreetMap servers are overloaded",
+        "Every server answered that it is too busy, or gave up part-way. Try again in a few minutes, or narrow the query.",
+      ];
+    default:
+      return explainOsm(e, { kind: true, sc: "pick" });
+  }
+}
+let retryAction = () => startSearch(null); // what "Try again" on the error card does
+async function runOwnQuery() {
+  const err = $("ownQueryError");
+  err.hidden = true;
+  if (running) return;
+  let prepared;
+  try {
+    prepared = prepareOwnQuery($("ownQuery").value);
+  } catch (e) {
+    err.textContent = e.message;
+    err.hidden = false;
+    return;
+  }
+  show("", "");
+  $("fail").hidden = true;
+  abort = new AbortController();
+  osmUse.own = osmUse.pub = 0;
+  osmUse.ownTrouble = "";
+  setPhase(1, "Running your query on OpenStreetMap", "Waiting for the answer.");
+  paint("Asking OpenStreetMap…");
+  $("ownQueryRun").disabled = true;
+  let elements;
+  try {
+    elements = await overpass(prepared.query, abort.signal, 0, prepared.seconds);
+  } catch (e) {
+    setPhase(0);
+    $("ownQueryRun").disabled = false;
+    if (e.name === "AbortError") return paint("Stopped.");
+    if (!(e instanceof SearchError)) throw e;
+    const [title, text] = explainOwnQuery(e);
+    retryAction = runOwnQuery;
+    fail(title, text, e.detail, true);
+    return paint(`Stopped. ${title}.`);
+  }
+  setPhase(0);
+  $("ownQueryRun").disabled = false;
+  try {
+    useOwn(
+      ownFromData(
+        { elements },
+        " Make sure the query ends with an output statement such as out center;.",
+        "Your query found nothing. Check it in Overpass Turbo.",
+      ),
+      "your query",
+    );
+    paint("Your places are loaded.");
+  } catch (e) {
+    err.textContent = e.message;
+    err.hidden = false;
+    paint("Ready.");
+  }
+}
+$("ownQuery").value = cleanText(store.get("ownQuery", ""), OWN_QUERY_MAX);
+$("ownQuery").oninput = () => store.set("ownQuery", $("ownQuery").value.slice(0, OWN_QUERY_MAX));
+$("ownQueryRun").onclick = runOwnQuery;
+$("ownQueryFromAbove").onclick = () => {
+  if ($("copyQuery").disabled) {
+    const err = $("ownQueryError");
+    err.textContent = "There is no query above yet. Choose a kind of place in step 1 first.";
+    err.hidden = false;
+    return;
+  }
+  $("ownQuery").value = $("queryText").value;
+  store.set("ownQuery", $("ownQuery").value);
+  $("ownQuery").focus();
+};
 
 /* ---------- shareable links ----------
    The settings travel in the query part of the address ("?k=…"). Links with the settings after "#" (older
@@ -1821,6 +1949,11 @@ function parseOwn(raw) {
   } catch {
     throw new Error("This is not valid JSON. It may be cut off, or a different export format." + how);
   }
+  return ownFromData(j, how, "Check the query in Overpass Turbo.");
+}
+/* Turns parsed Overpass JSON into places, for a loaded file or the answer to your own query.
+   how: advice added to format errors; emptyHint: what to say when there are no elements. */
+function ownFromData(j, how, emptyHint) {
   if (j && (j.type === "FeatureCollection" || j.type === "Feature" || Array.isArray(j.features)))
     throw new Error("This is GeoJSON. Only raw OSM data is accepted." + how);
   if (j && Array.isArray(j.customCoordinates))
@@ -1828,9 +1961,7 @@ function parseOwn(raw) {
   if (!j || !Array.isArray(j.elements))
     throw new Error('This JSON has no "elements" list, so it is not raw OSM data.' + how);
   if (!j.elements.length)
-    throw new Error(
-      `The result is empty${j.remark ? ": " + cleanText(j.remark, 200) : ""}. Check the query in Overpass Turbo.`,
-    );
+    throw new Error(`The result is empty${j.remark ? ": " + cleanText(j.remark, 200) : ""}. ${emptyHint}`);
 
   // Positions of plain nodes, and which nodes only exist as corner points of outlines.
   const at = new Map(),
@@ -2378,7 +2509,7 @@ $("failClose").onclick = () => {
   paint();
 };
 $("failRetry").onclick = () => {
-  if (!running) startSearch(null);
+  if (!running) retryAction();
 };
 /* Updates the counters, progress bar and buttons from searchStats and results. now: new status line. */
 function paint(now) {
@@ -2824,6 +2955,7 @@ async function startSearch(reuse) {
         detail = String(e && (e.stack || e.message || e)).slice(0, 600);
       }
       if (!results.length) searchStats.progress = 0;
+      retryAction = () => startSearch(null);
       fail(title, text, detail, !!e.retry);
       paint(
         results.length
