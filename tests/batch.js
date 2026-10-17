@@ -84,7 +84,12 @@ const scenarios = {
     });
     await p.goto(PAGE);
     await p.fill("#apiKey", "KEY");
-    await p.check("input[name=scope][value=cov]");
+    await p.check("input[name=scope][value=pick]");
+    // tick every Street View country, so the search runs in parts
+    await p.evaluate(() => {
+      for (const c of COVERAGE) selected.add(c);
+      renderCountries();
+    });
     await p.fill("#kind", "Lighthouse");
     await p.keyboard.press("Enter");
     await p.click("#go");

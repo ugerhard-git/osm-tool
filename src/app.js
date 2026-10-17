@@ -9,7 +9,8 @@
  *
  * HOW A SEARCH RUNS (see startSearch)
  *   1. Step 1 sets `kind` (a tag such as historic=castle) and/or words the name must contain.
- *      Step 2 sets where: chosen countries, all Street View countries, or the whole world.
+ *      Step 2 sets where: chosen countries, or the whole world. Places whose answer names no country get
+ *      one from their position (countryAt).
  *   2. buildQuery() writes the Overpass query. fetchPlaces() sends it in parts of a few countries
  *      (makeParts, halve) through overpass(), which tries the public servers and the user's own server.
  *      mergeElements() turns the answers into Place objects.
@@ -216,6 +217,18 @@ const countryName = c => {
     return c;
   }
 };
+/* The country or territory at a position, from the country-coder library built into the page (offline,
+   with simplified borders). Used for places whose OpenStreetMap answer does not say, such as a
+   whole-world search or an own result. Territory level, so Réunion is RE rather than France. Returns
+   undefined at sea far from land, or if the library is missing. */
+function countryAt(lat, lng) {
+  try {
+    const c = window.countryCoder?.iso1A2Code([lng, lat], { level: "territory" });
+    return typeof c === "string" && CODES.includes(c) ? c : undefined;
+  } catch {
+    return undefined;
+  }
+}
 for (const c of [...COVERAGE]) if (!CODES.includes(c)) COVERAGE.delete(c);
 const COUNTRIES = CODES.map(c => ({ code: c, name: countryName(c) })).sort((a, b) =>
   a.name.localeCompare(b.name),
@@ -686,9 +699,11 @@ $("lang").onchange = () => {
 
 /* ---------- step 2: where ---------- */
 const selected = new Set(store.get("countries", []).filter(c => CODES.includes(c)));
-/* Where to search: "pick" (chosen countries), "cov" (all Street View countries) or "world". */
+/* Where to search: "pick" (chosen countries) or "world". */
 const scope = () => document.querySelector("input[name=scope]:checked").value;
-$("covHint").textContent = `The ${COVERAGE.size} countries and territories Google has driven.`;
+/* "cov" (all Street View countries) was a third choice until it was replaced by "world", which now also
+   finds each place's country. Saved settings and shared links that still say "cov" mean "world". */
+const scopeValue = s => (s === "cov" ? "world" : ["pick", "world"].includes(s) ? s : null);
 /* Draws the country list and the chips of chosen countries, and saves the choice. */
 function renderCountries() {
   const q = $("countrySearch").value.trim().toLowerCase();
@@ -760,7 +775,7 @@ function renderQuery() {
     ok = false;
   try {
     const s = scope(),
-      codes = s === "world" ? null : s === "cov" ? [...COVERAGE] : [...selected];
+      codes = s === "world" ? null : [...selected];
     const filter = (kind ? tagFilter(kind.tag) : "") + nameFilter();
     if (!filter) text = "Choose a kind of place or enter a name in step 1.";
     else if (codes && !codes.length) text = "Tick one or more countries in step 2.";
@@ -794,14 +809,12 @@ function suggestName() {
   const s = scope();
   const where =
     s === "world"
-      ? "Whole world"
-      : s === "cov"
-        ? "World"
-        : selected.size === 0
-          ? ""
-          : selected.size <= 2
-            ? [...selected].map(countryName).join(" and ")
-            : selected.size + " countries";
+      ? "World"
+      : selected.size === 0
+        ? ""
+        : selected.size <= 2
+          ? [...selected].map(countryName).join(" and ")
+          : selected.size + " countries";
   if (ownResult) {
     $("mapName").placeholder = ownLabel();
     return;
@@ -826,11 +839,8 @@ $("official").checked = store.get("official", true);
 $("tagCountry").checked = store.get("tagCountry", true);
 $("tagRoad").checked = store.get("tagRoad", false);
 {
-  const s = store.get("scope", "pick");
-  const r = document.querySelector(
-    `input[name=scope][value=${["cov", "pick", "world"].includes(s) ? s : "pick"}]`,
-  );
-  r.checked = true;
+  const s = scopeValue(store.get("scope", "pick")) || "pick";
+  document.querySelector(`input[name=scope][value=${s}]`).checked = true;
 }
 $("keyBox").hidden = !!GOOGLE_API_KEY;
 $("apiKey").value = keyStore.get();
@@ -1022,9 +1032,10 @@ $("srvRemember").onchange = srvResave;
 
 /* ---------- your own Overpass result: state ---------- */
 let ownResult = null; // { places, noPosition, lines, worked, hasCc, countries, source }
-/* The country tag needs a country per place, which "Whole world" and some own results do not have. */
+/* The country tag needs a country per place. Every search finds one (from OpenStreetMap, or from the
+   position); only an own result where no place could be placed in a country has none. */
 function updateCountryTag() {
-  const off = ownResult ? !ownResult.hasCc : scope() === "world";
+  const off = !!ownResult && !ownResult.hasCc;
   $("tagCountry").disabled = off;
   $("tagCountryRow").classList.toggle("off", off);
   const h = $("tagCountryHint");
@@ -1033,9 +1044,7 @@ function updateCountryTag() {
     h.textContent = "";
     h.append(
       document.createElement("br"),
-      ownResult
-        ? "Not available: this result does not say which country each place is in."
-        : 'Not available with "Whole world", which does not know the country of a place.',
+      "Not available: no country could be found for the places in this result.",
     );
   }
 }
@@ -1068,8 +1077,8 @@ function renderOwn() {
     const lines = [];
     lines.push(
       ownResult.hasCc
-        ? `Country known for places in ${fmt(ownResult.countries)} ${ownResult.countries === 1 ? "country" : "countries"}.`
-        : "No country information in this result, so locations get no country code.",
+        ? `Places in ${fmt(ownResult.countries)} ${ownResult.countries === 1 ? "country" : "countries"}.`
+        : "No country could be found for these places, so locations get no country code.",
     );
     if (ownResult.worked)
       lines.push(
@@ -1224,9 +1233,8 @@ function applyLink() {
     } catch {}
   }
   $("nameHas").value = cleanText(q.get("n"), 200);
-  const s = q.get("s");
-  if (["cov", "pick", "world"].includes(s))
-    document.querySelector(`input[name=scope][value=${s}]`).checked = true;
+  const s = scopeValue(q.get("s"));
+  if (s) document.querySelector(`input[name=scope][value=${s}]`).checked = true;
   if (q.has("c")) {
     selected.clear();
     for (const c of cleanText(q.get("c"), 1200).split(/[-,]/)) if (CODES.includes(c)) selected.add(c);
@@ -1758,7 +1766,8 @@ function buildQuery(filter, codes, grouped = true, pretty = false, seconds = WOR
 }
 /* Reads Overpass elements into byId (a Map of Place by "node123", "way45", …). In a grouped answer each
    country's places follow an element of type "area" naming the country. fallbackCc: country to use when
-   the answer names none. stats.noPosition counts elements without a position. */
+   the answer names none; without either, the country is found from the position (countryAt).
+   stats.noPosition counts elements without a position. */
 function mergeElements(els, byId, fallbackCc, stats) {
   if (!Array.isArray(els)) return;
   let cc = fallbackCc;
@@ -1777,15 +1786,17 @@ function mergeElements(els, byId, fallbackCc, stats) {
       if (stats) stats.noPosition++;
       continue;
     }
+    // The answer's own country if it names one; otherwise found from the position.
+    const placeCc = cc || countryAt(lat, lng);
     const id = e.type + e.id,
       had = byId.get(id);
-    if (had && !(PARENTS.has(had.cc) && cc && !PARENTS.has(cc))) continue; // keep the more specific territory
+    if (had && !(PARENTS.has(had.cc) && placeCc && !PARENTS.has(placeCc))) continue; // keep the more specific territory
     byId.set(id, {
       id: e.id,
       type: e.type,
       lat,
       lng,
-      cc,
+      cc: placeCc,
       name: cleanText(e.tags?.["name:en"]) || cleanText(e.tags?.name),
     });
   }
@@ -2304,7 +2315,7 @@ let results = [],
   lastName = "",
   ticker = 0;
 /* The places from the last successful OpenStreetMap search, kept so Street View can be checked again
-   with other settings: { places, skipped, label, name, where } */
+   with other settings: { places, skipped, label, name, where, world } */
 let lastFetch = null;
 function renderAgain() {
   const on = !!lastFetch && !ownResult;
@@ -2316,7 +2327,8 @@ function renderAgain() {
 }
 /* Counters for one search, shown under the map: places found, checked, left out (none, far, close,
    unofficial, dup = shares a panorama with another place), failed lookups and why, places rescued by
-   the second official-only look, road name results, countries skipped, and progress from 0 to 1. */
+   the second official-only look, road name results, countries skipped, places skipped in a whole-world
+   search because their country has no official Street View (noCoverage), and progress from 0 to 1. */
 const emptyStats = () => ({
   places: 0,
   checked: 0,
@@ -2330,6 +2342,7 @@ const emptyStats = () => ({
   rescued: 0,
   road: { has: 0, none: 0, unknown: 0 },
   skipped: 0,
+  noCoverage: 0,
   progress: 0,
 });
 let searchStats = emptyStats();
@@ -2391,6 +2404,10 @@ function paint(now) {
   if (searchStats.rescued)
     t.push(`<span><b>${fmt(searchStats.rescued)}</b> found by a second, official-only look</span>`);
   if (searchStats.failed) t.push(`<span><b>${fmt(searchStats.failed)}</b> lookups failed</span>`);
+  if (searchStats.noCoverage)
+    t.push(
+      `<span><b>${fmt(searchStats.noCoverage)}</b> skipped in countries without official Street View</span>`,
+    );
   if (searchStats.skipped)
     t.push(
       `<span><b>${fmt(searchStats.skipped)}</b> ${searchStats.skipped === 1 ? "country" : "countries"} left out</span>`,
@@ -2476,7 +2493,10 @@ async function startSearch(reuse) {
     addRoad = $("tagRoad").checked;
   const sc = scope(),
     label = ownRun ? ownRun.label : searchLabel();
-  const codes = ownRun || sc === "world" ? null : sc === "cov" ? [...COVERAGE] : [...selected];
+  const codes = ownRun || sc === "world" ? null : [...selected];
+  // A whole-world search, or a re-check of one: places in countries without official Street View are
+  // skipped when only official coverage is wanted (see below).
+  const wholeWorld = reuse ? !!reuse.world : !ownResult && sc === "world";
   let filter = "";
   if (!ownRun) {
     try {
@@ -2491,7 +2511,7 @@ async function startSearch(reuse) {
   if (!ownRun && !kind && sc !== "pick")
     return show(
       "error",
-      `A name search without a kind of place has to read everything on the map, which is too much for this many countries. Choose "Only the countries I choose" in step 2, or add a kind of place.`,
+      `A name search without a kind of place has to read everything on the map, which is too much for the whole world. Choose "Only the countries I choose" in step 2, or add a kind of place.`,
     );
   if (!ownRun && kind && !words.length && sc !== "pick" && kind.count > TOO_MANY)
     return show(
@@ -2598,7 +2618,28 @@ async function startSearch(reuse) {
         { plain: true },
       );
     if (!ownRun)
-      lastFetch = { places: places.map(p => ({ ...p })), skipped, label, name: lastName, where: whereText };
+      lastFetch = {
+        places: places.map(p => ({ ...p })),
+        skipped,
+        label,
+        name: lastName,
+        where: whereText,
+        world: wholeWorld,
+      };
+    // Official coverage only: in countries Google has not driven there are only photos uploaded by other
+    // people, so don't spend Google lookups there. Places with no known country (far out at sea) stay in.
+    if (official && wholeWorld) {
+      const kept = places.filter(p => !p.cc || COVERAGE.has(p.cc));
+      searchStats.noCoverage = places.length - kept.length;
+      places = kept;
+      if (!places.length)
+        throw Object.assign(
+          new Error(
+            'All of these places are in countries without official Street View. Switch off "Official Google coverage only" in step 3 to include photos uploaded by other people.',
+          ),
+          { plain: true },
+        );
+    }
     shuffle(places);
     drawCandidates(places);
     setPhase(2, "Checking Street View", `${fmt(places.length)} places to check.`);
@@ -2874,5 +2915,4 @@ document.addEventListener("keydown", e => {
     f[(i + (e.shiftKey ? f.length - 1 : 1) + f.length) % f.length].focus();
   }
 });
-$("welcomeN").textContent = $("welcomeN2").textContent = COVERAGE.size;
 if (!store.get("welcomed", false) && !FRAMED) openWelcome();
