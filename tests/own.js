@@ -220,12 +220,7 @@ fs.writeFileSync(path.join(__dirname, "../dist/loose-export.json"), JSON.stringi
   }));
   console.log("  ", JSON.stringify(st));
   ok(
-    st.n === 6 &&
-      st.worked === 5 &&
-      st.noPos === 1 &&
-      st.lines === 1 &&
-      !st.cc &&
-      !/undefined/.test(st.names),
+    st.n === 6 && st.worked === 5 && st.noPos === 1 && st.lines === 1 && st.cc && !/undefined/.test(st.names),
     "outlines get a centre, corner nodes ignored, object without position skipped, line noticed",
   );
   ok(
@@ -233,18 +228,19 @@ fs.writeFileSync(path.join(__dirname, "../dist/loose-export.json"), JSON.stringi
     "centre computed from corner nodes",
   );
   ok(
-    (await p.isDisabled("#tagCountry")) &&
-      /does not say which country/.test(await p.textContent("#tagCountryHint")) &&
+    !(await p.isDisabled("#tagCountry")) &&
+      (await p.isHidden("#tagCountryHint")) &&
+      /Places in 1 country/.test(await p.textContent("#ownSummary")) &&
       (await p.inputValue("#ownLabel")) === "Castles",
-    "country tag off without country info; label kept",
+    "no country information in the file: found from the position, country tag available; label kept",
   );
   await p.click("#go");
   await p.waitForFunction(() => !running && /Done/.test(document.getElementById("now").textContent));
   const j2 = JSON.parse(await p.evaluate(() => exportJson()));
   ok(
     j2.customCoordinates.length === 6 &&
-      j2.customCoordinates.every(c => !("countryCode" in c) && !("extra" in c)),
-    "loose result runs; no country code and no tags",
+      j2.customCoordinates.every(c => c.countryCode === "DE" && c.extra.tags.join() === "Germany"),
+    "loose result runs; country code and tag found from the position",
   );
   // pasted text, then back to normal
   await p.fill("#ownText", JSON.stringify(grouped));
@@ -256,7 +252,7 @@ fs.writeFileSync(path.join(__dirname, "../dist/loose-export.json"), JSON.stringi
     "pasted text accepted",
   );
   await p.click("#ownRemove");
-  await p.check("input[name=scope][value=cov]");
+  await p.check("input[name=scope][value=world]");
   ok((await p.textContent("#lastStepNo")) === "3", "step number restored");
   ok(
     (await p.isHidden("#ownStep")) &&

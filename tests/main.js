@@ -63,6 +63,15 @@ function meta(lat) {
     };
   return { status: "UNKNOWN_ERROR" };
 }
+/* Ticks every Street View country under "Only the countries I choose", so a search runs in parts. */
+async function allCoverage(page) {
+  await page.check("input[name=scope][value=pick]");
+  await page.evaluate(() => {
+    selected.clear();
+    for (const c of COVERAGE) selected.add(c);
+    renderCountries();
+  });
+}
 async function setup(browser, o = {}) {
   const opt = Object.assign(
     {
@@ -78,7 +87,7 @@ async function setup(browser, o = {}) {
   );
   const ctx = await browser.newContext({ viewport: opt.vp, acceptDownloads: true, locale: opt.locale });
   const page = await ctx.newPage();
-  const log = { overpass: [], errors: [], taginfo: [], opt };
+  const log = { overpass: [], errors: [], taginfo: [], opt, svLookups: 0, svLocations: [] };
   page.on("pageerror", e => log.errors.push(String(e)));
   page.on("console", m => {
     if (m.type() === "error" && !/Failed to load resource|ERR_FAILED/.test(m.text()))
@@ -103,7 +112,7 @@ async function setup(browser, o = {}) {
         return opt.failGrouped
           ? route.fulfill({ status: 400, body: "parse error", headers: H })
           : route.fulfill({ json: { elements: GROUPED }, headers: H });
-      return route.fulfill({ json: { elements: [...PL, RE] }, headers: H });
+      return route.fulfill({ json: { elements: [...PL, RE, ...(opt.extra || [])] }, headers: H });
     }
     if (u.includes("taginfo.openstreetmap.org/api")) {
       log.taginfo.push(u);
@@ -145,6 +154,8 @@ async function setup(browser, o = {}) {
     if (u.includes("streetview/metadata")) {
       if (opt.gDelay) await new Promise(r => setTimeout(r, opt.gDelay));
       const m = /location=([-\d.]+),([-\d.]+)/.exec(u);
+      log.svLookups++;
+      log.svLocations.push(m[1] + "," + m[2]);
       return route.fulfill({ json: meta(+m[1], +m[2]), headers: H });
     }
     if (u.includes("maps/api/js")) return route.abort();
@@ -152,7 +163,7 @@ async function setup(browser, o = {}) {
   });
   await page.goto(page_url);
   await page.waitForLoadState("load");
-  await page.check("input[name=scope][value=cov]"); // these tests search all Street View countries
+  await allCoverage(page); // these tests search all Street View countries
   return { page, log, ctx };
 }
 const done = page =>
@@ -179,8 +190,8 @@ const done = page =>
     );
     ok(
       JSON.stringify(await page.$$eval("input[name=scope]", rs => rs.map(r => r.value))) ===
-        '["pick","world","cov"]',
-      "Street View countries listed third",
+        '["pick","world"]',
+      "two search areas: chosen countries and the whole world",
     );
     ok(
       !/Maps JavaScript API/.test(await page.textContent("label:has(#tagRoad)")),
@@ -195,8 +206,8 @@ const done = page =>
       ok(gap >= 14, "space between country list and Whole world: " + gap);
     }
     ok(
-      /119 countries/.test(await page.textContent("#covHint")),
-      "coverage hint: " + (await page.textContent("#covHint")),
+      /gets its country/.test(await page.textContent("label:has(input[value=world])")),
+      "whole-world hint says locations still get their country",
     );
     await page.fill("#maxDist", "25"); // the checks below were written for 25 m
     await page.fill("#apiKey", "KEY");
@@ -224,7 +235,10 @@ const done = page =>
       /Searching for man_made=lighthouse/.test(await page.textContent("#picked")),
       "picked card: " + (await page.textContent("#picked")),
     );
-    ok((await page.getAttribute("#mapName", "placeholder")) === "Lighthouse (World)", "name placeholder");
+    ok(
+      (await page.getAttribute("#mapName", "placeholder")) === "Lighthouse (119 countries)",
+      "name placeholder: " + (await page.getAttribute("#mapName", "placeholder")),
+    );
     // run with coverage default
     await page.click("#go");
     await page.waitForSelector("#live:not([hidden])");
@@ -399,6 +413,10 @@ const done = page =>
     await page.check("#tagCountry");
     // pick scope with uncovered country
     await page.check("input[name=scope][value=pick]");
+    await page.evaluate(() => {
+      selected.clear();
+      renderCountries();
+    });
     await page.fill("#countrySearch", "ma");
     await page.check("#countries input[value=MT]");
     await page.check("#countries input[value=MG]");
@@ -426,28 +444,36 @@ const done = page =>
         '[out:json][timeout:180];node["man_made"="lighthouse"];out body;(way["man_made"="lighthouse"];relation["man_made"="lighthouse"];);out tags center;',
       "world query",
     );
+    {
+      const w = JSON.parse(await page.evaluate(() => exportJson()));
+      const cc = Object.fromEntries(w.customCoordinates.map(c => [c.panoId, c.countryCode]));
+      ok(
+        /\(World\)$/.test(w.name) &&
+          w.customCoordinates.every(c => c.countryCode && c.extra.tags.length === 1) &&
+          cc.PANO_ID_0000_A === "MT" &&
+          cc.PANO_ID_0000_R === "RE",
+        "world: every location gets its country from its position (Réunion as RE): " + JSON.stringify(cc),
+      );
+    }
     ok(
-      JSON.parse(await page.evaluate(() => exportJson())).customCoordinates.every(c => !("countryCode" in c)),
-      "world: no cc",
-    );
-    ok(
-      (await page.isDisabled("#tagCountry")) &&
-        (await page.isChecked("#tagCountry")) &&
-        (await page.isVisible("#tagCountryHint")),
-      "country tag box disabled for whole world",
+      !(await page.isDisabled("#tagCountry")) && (await page.isHidden("#tagCountryHint")),
+      "country tag available for whole world",
     );
     await page.evaluate(() => document.getElementById("tagCountry").scrollIntoView({ block: "center" }));
     await page.screenshot({ path: require("path").join(__dirname, "../dist/screens/j1.png") });
-    await page.check("input[name=scope][value=cov]");
+    // world with official coverage only: a place in a country Google has not driven is skipped
+    log.opt.extra = [{ type: "node", id: 50, lat: -18.91, lon: 47.52, tags: { name: "Antananarivo Light" } }];
+    await page.check("#official");
+    const lookupsBefore = log.svLookups;
+    await page.click("#go");
+    await done(page);
     ok(
-      !(await page.isDisabled("#tagCountry")) && (await page.isHidden("#tagCountryHint")),
-      "enabled again for other choices",
+      /1<\/b> skipped in countries without official Street View/.test(await page.innerHTML("#tally")) &&
+        !log.svLocations.some(l => l.startsWith("-18.91")) &&
+        log.svLookups > lookupsBefore,
+      "world + official only: place in Madagascar skipped before any Google lookup",
     );
-    await page.check("input[name=scope][value=world]");
-    ok(
-      JSON.parse(await page.evaluate(() => exportJson())).customCoordinates.every(c => !("extra" in c)),
-      "world: no country tag, so no tags at all",
-    );
+    log.opt.extra = [];
     // raw tag
     await page.fill("#kind", "amenity=pub|bar, name=*");
     await page.waitForFunction(() => /amenity=pub\|bar/.test(document.getElementById("picked").textContent));
@@ -455,13 +481,13 @@ const done = page =>
     await done(page);
     ok(log.overpass.at(-1).includes('node["amenity"~"^(pub|bar)$"]["name"];out body;'), "raw tag filter");
     // name search
-    await page.check("input[name=scope][value=cov]");
+    await allCoverage(page);
     await page.fill("#kind", "Lighthouse");
     await page.keyboard.press("Enter");
     await page.fill("#nameHas", 'Liberty, liberté, St. "X"');
     ok(
       /name containing Liberty or liberté/.test(await page.textContent("#picked")) &&
-        (await page.getAttribute("#mapName", "placeholder")) === "Lighthouse: Liberty (World)",
+        (await page.getAttribute("#mapName", "placeholder")) === "Lighthouse: Liberty (119 countries)",
       "name card: " + (await page.textContent("#picked")),
     );
     await page.evaluate(() => document.querySelector(".panel").scrollTo(0, 150));
@@ -482,12 +508,21 @@ const done = page =>
     await page.fill("#kind", "");
     await page.fill("#nameHas", "alpaka, alpaca");
     let n0 = log.overpass.length;
+    await page.check("input[name=scope][value=world]");
     await page.click("#go");
     ok(
-      /without a kind of place/.test(await page.textContent("#message")) && log.overpass.length === n0,
-      "name-only blocked outside chosen countries",
+      /without a kind of place/.test(await page.textContent("#message")) &&
+        /too much for the whole world/.test(await page.textContent("#message")) &&
+        log.overpass.length === n0,
+      "name-only blocked for the whole world",
     );
     await page.check("input[name=scope][value=pick]");
+    await page.evaluate(() => {
+      selected.clear();
+      selected.add("MT");
+      selected.add("MG");
+      renderCountries();
+    });
     await page.click("#go");
     await done(page);
     ok(
@@ -533,7 +568,7 @@ const done = page =>
     ok(log.overpass.at(-1).includes('"man_made"="windmill"'), "exact name accepted");
     // too many
     log.opt.count = 900000;
-    await page.check("input[name=scope][value=cov]");
+    await page.check("input[name=scope][value=world]");
     await page.fill("#kind", "Castle");
     await page.keyboard.press("Enter");
     await page.waitForFunction(() => /900,000/.test(document.getElementById("picked").textContent));
@@ -557,7 +592,8 @@ const done = page =>
       .waitForFunction(() => document.getElementById("kind").value !== "", null, { timeout: 5000 })
       .catch(() => {});
     ok(
-      (await page.inputValue("#kind")) === "Castle" && (await page.isChecked("input[name=scope][value=cov]")),
+      (await page.inputValue("#kind")) === "Castle" &&
+        (await page.isChecked("input[name=scope][value=world]")),
       "restored: " + (await page.inputValue("#kind")),
     );
     ok(log.errors.length === 0, "no page errors " + log.errors.join(" | "));
@@ -609,7 +645,7 @@ const done = page =>
     console.log("FALLBACK", JSON.stringify(j).slice(0, 400));
     ok(
       j.customCoordinates.length === 3 &&
-        j.name === "Phare (World)" &&
+        j.name === "Phare (119 countries)" &&
         j.customCoordinates.every(c => !(c.extra?.tags || []).includes("Phare")),
       "fallback results " + j.name,
     );
@@ -719,7 +755,10 @@ const done = page =>
     }));
     console.log(JSON.stringify(st));
     ok(st.places === 3 && st.n === 1 && st.failed === 2, "malformed places and panoramas rejected");
-    ok(st.cc[0] === undefined && st.date[0] === "", "hostile country code and date discarded");
+    ok(
+      st.cc[0] === "MT" && st.date[0] === "",
+      "hostile country code and date discarded; the country is found from the position instead: " + st.cc[0],
+    );
     // open every popup, found and left out
     await page.evaluate(() => {
       layer.eachLayer(l => {
@@ -830,9 +869,9 @@ const done = page =>
     await page.goto(SITE + "edited.html");
     await page.waitForLoadState("load");
     ok(
-      (await page.isHidden("#keyBox")) && /121 countries/.test(await page.textContent("#covHint")),
+      (await page.isHidden("#keyBox")) && (await page.evaluate(() => COVERAGE.size)) === 121,
       "settings block: key hides the field, country list edited safely: " +
-        (await page.textContent("#covHint")),
+        (await page.evaluate(() => COVERAGE.size)),
     );
     ok(!!(await page.evaluate(() => window.L && map)), "embedded map library runs under the policy");
     ok(
@@ -842,7 +881,7 @@ const done = page =>
     );
     await page.fill("#kind", "Lighthouse");
     await page.keyboard.press("Enter");
-    await page.check("input[name=scope][value=cov]");
+    await allCoverage(page);
     await page.click("#go");
     await done(page);
     ok(

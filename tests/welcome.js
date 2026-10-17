@@ -38,16 +38,13 @@ const { PAGE, isSite, serveSite } = require("./site.js");
     "warns about slow servers, timeouts and retries",
   );
   ok(
-    /Searching all 119 Street View countries at once takes a long time and is likely to run out of time/.test(
-      t,
-    ) && /one or two countries/.test(t),
-    "advises one or two countries at a time",
+    /"Whole world" works well for rare kinds of place, but for common ones it takes a long time/.test(t) &&
+      /tick one or two countries/.test(t),
+    "advises one or two countries at a time for common kinds of place",
   );
   ok(
-    /"Whole world" is usually faster than all Street View countries, but its locations get no country tag/.test(
-      t,
-    ),
-    "explains Whole world is faster but has no country tag",
+    /every location gets its country in the map-making\.app file/.test(t) && !/119|no country tag/.test(t),
+    "says every location gets its country; no mention of the removed option",
   );
   await p.screenshot({ path: require("path").join(__dirname, "../dist/screens/w1.png") });
   await p.click(".welcome-box h2");

@@ -50,8 +50,8 @@ The code is read by the owner and by developers who don't know the project. Writ
 
 ## Things that must not break
 
-- **Saved settings.** The names saved in the browser (`lookout2.…`, listed at the top of `src/app.js`) stay as they are, so visitors keep their choices. When an option is removed, clear its saved value when the page loads.
-- **Shared links.** Links people have already sent must keep opening: query links (`?k=…`), older `#` links, and links with parameters that no longer exist (they are ignored). Everything read from a link is checked before use.
+- **Saved settings.** The names saved in the browser (`lookout2.…`, listed at the top of `src/app.js`) stay as they are, so visitors keep their choices. When an option is removed, clear its saved value when the page loads. When a choice is removed, map its saved value to the closest remaining one (a saved "cov" becomes "world").
+- **Shared links.** Links people have already sent must keep opening: query links (`?k=…`), older `#` links, links with parameters that no longer exist (they are ignored), and retired values: `s=cov`, the former "Countries with Street View", opens as "Whole world". Everything read from a link is checked before use.
 - **The security policy.** Only the page's own scripts may run. The build fingerprints them, so inline event handlers (`onclick="…"`) and new outside scripts will not run; wire events up in `app.js`. Do not loosen the policy to make a change work. `tests/security.js` checks it, and [SECURITY.md](SECURITY.md) lists the protections.
 - **Untrusted input.** Treat everything from outside (Overpass, taginfo, Google, uploaded files, shared links, saved settings) as untrusted: check it, and put it on the page as text, never as HTML.
 - **Keys.** Never put keys in the repository, in shared links or in error messages. The site key comes from the `GOOGLE_API_KEY` environment variable at build time.

@@ -51,6 +51,12 @@ const { PAGE, isSite, serveSite } = require("./site.js");
     want(await st(p)) && !p.errs.length && !(await p.$("#tags")) && !(await p.$("#tagName")),
     "older links with the removed tag options still work: " + p.errs.join(" | "),
   );
+  // links from before "Countries with Street View" was removed: s=cov now means the whole world
+  p = await open(file + "?k=man_made%3Dlighthouse&s=cov&d=50&t=1000");
+  ok(
+    (await st(p)).scope === "world" && (await st(p)).kind === "Lighthouse" && !p.errs.length,
+    'older links with "Countries with Street View" open as "Whole world"',
+  );
   // old-style link after "#"
   p = await open(file + "#k=man_made%3Dlighthouse&s=pick&c=DK-IS&d=50&t=1000");
   ok(want(await st(p)), 'older "#" links still work');

@@ -25,7 +25,7 @@ const appCss = src("style.css"),
   appJs = src("app.js");
 if (/<\/style/i.test(appCss)) throw new Error("style.css contains a closing style tag");
 if (/<\/script/i.test(appJs)) throw new Error("app.js contains a closing script tag");
-if (/\/\*(CATALOG|LEAFLET_JS|LEAFLET_CSS|FONT_CSS|CSP)\*\//.test(appCss + appJs))
+if (/\/\*(CATALOG|LEAFLET_JS|COUNTRY_CODER_JS|LEAFLET_CSS|FONT_CSS|CSP)\*\//.test(appCss + appJs))
   throw new Error("a build placeholder appears in style.css or app.js");
 put("/*APP_CSS*/", appCss);
 put("/*APP_JS*/", appJs);
@@ -52,6 +52,18 @@ const leafletJs = fs
   .replace(/\/\/# sourceMappingURL=.*$/m, "");
 if (/<\/script/i.test(leafletJs)) throw new Error("leaflet contains a closing script tag");
 put("/*LEAFLET_JS*/", leafletJs);
+
+// country-coder 5, from the npm package: finds the country of a position offline, for places whose
+// OpenStreetMap answer does not say (whole-world searches, own results). It sets window.countryCoder.
+const countryCoderJs = fs
+  // (Its package does not expose package.json, so its folder is found from its main file, in dist/.)
+  .readFileSync(
+    path.join(path.dirname(require.resolve("@rapideditor/country-coder")), "country-coder.iife.js"),
+    "utf8",
+  )
+  .replace(/^\/\/# (sourceMappingURL|debugId)=.*$/gm, "");
+if (/<\/script/i.test(countryCoderJs)) throw new Error("country-coder contains a closing script tag");
+put("/*COUNTRY_CODER_JS*/", countryCoderJs);
 // Drop rules that would fetch image files the page does not use.
 const leafletCss = fs
   .readFileSync(pkg("leaflet") + "/dist/leaflet.css", "utf8")

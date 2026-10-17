@@ -8,10 +8,10 @@ It runs entirely in the browser as a single HTML page. There is no server of its
 
 ## How it works
 
-1. **Find the places.** The kind of place (an OpenStreetMap tag such as `man_made=lighthouse`, chosen through a searchable catalogue in English, German, French, Spanish and Portuguese) and optional name words are turned into an [Overpass API](https://wiki.openstreetmap.org/wiki/Overpass_API) query. Country searches are sent in parts, a few countries at a time; parts that time out are split and retried.
+1. **Find the places.** The kind of place (an OpenStreetMap tag such as `man_made=lighthouse`, chosen through a searchable catalogue in English, German, French, Spanish and Portuguese) and optional name words are turned into an [Overpass API](https://wiki.openstreetmap.org/wiki/Overpass_API) query. Searches over chosen countries are sent in parts, a few countries at a time; parts that time out are split and retried. A whole-world search is a single query.
 2. **Check Street View.** For each place, Google's free Street View metadata service is asked for the nearest panorama within the chosen distance. If the nearest one is a user photo, a second, official-only look is made.
 3. **Face the place.** Each accepted location gets a heading from the panorama towards the place.
-4. **Export.** The result downloads as a map-making.app JSON file, optionally tagged with the country and with whether a road name is shown.
+4. **Export.** The result downloads as a map-making.app JSON file with each location's country code, optionally tagged with the country and with whether a road name is shown. Where OpenStreetMap's answer does not say which country a place is in (a whole-world search, your own Overpass result), the country is found from the place's position, offline in the browser.
 
 More features: a shareable link for each search, uploading your own Overpass Turbo result, using your own (paid) Overpass server, a list of found locations by name, and removing locations before export.
 
@@ -34,7 +34,7 @@ npm run build                          # dist/index.html without a key
 GOOGLE_API_KEY=your-key npm run build  # dist/index.html with your key built in
 ```
 
-The build writes one self-contained file, `dist/index.html` (about 1 MB). It embeds the place catalogue, the Leaflet map library and the Overpass font, and it adds a Content Security Policy that only allows the page's own scripts to run.
+The build writes one self-contained file, `dist/index.html` (about 1.75 MB, about 630 KB when sent compressed). It embeds the place catalogue, the Leaflet map library, the country-coder country lookup and the Overpass font, and it adds a Content Security Policy that only allows the page's own scripts to run.
 
 Never commit a key. The key is inserted by the build from the `GOOGLE_API_KEY` environment variable; the published site gets it from a GitHub secret.
 
@@ -73,7 +73,8 @@ Pushing to `main` builds the page with the key from the repository secret `GOOGL
 - Place data: © [OpenStreetMap contributors](https://www.openstreetmap.org/copyright), ODbL, fetched live through the Overpass API and taginfo.
 - Place catalogue and translations: [id-tagging-schema](https://github.com/openstreetmap/id-tagging-schema) (ISC License).
 - Map: [Leaflet](https://leafletjs.com) (BSD 2-Clause License) with OpenStreetMap tiles.
+- Country lookup: [country-coder](https://github.com/rapideditor/country-coder) (ISC License). Its borders are simplified, so a place within a few metres of a border can get the neighbouring country.
 - Font: [Overpass](https://github.com/RedHatOfficial/Overpass) via Fontsource (SIL Open Font License 1.1).
 - Street View data: Google Maps Platform, under Google's terms.
 
-The country list for "Countries with Street View" started from the world weights in [Vali](https://github.com/slashP/Vali).
+The list of countries with official Street View started from the world weights in [Vali](https://github.com/slashP/Vali).

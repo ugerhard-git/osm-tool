@@ -32,7 +32,7 @@ const page = path.resolve(__dirname, "../dist/index.nokey.html");
     "no libraries or fonts from CDNs",
   );
   ok(
-    !/\/\*(APP_CSS|APP_JS|CATALOG|LEAFLET_JS|LEAFLET_CSS|FONT_CSS|CSP|ICON_SVG|ICON_PNG|ICON_TOUCH)\*\//.test(
+    !/\/\*(APP_CSS|APP_JS|CATALOG|LEAFLET_JS|COUNTRY_CODER_JS|LEAFLET_CSS|FONT_CSS|CSP|ICON_SVG|ICON_PNG|ICON_TOUCH)\*\//.test(
       html,
     ),
     "every build placeholder filled in",
@@ -42,6 +42,10 @@ const page = path.resolve(__dirname, "../dist/index.nokey.html");
       html.includes(fs.readFileSync(path.resolve(__dirname, "../src/app.js"), "utf8").trim()) &&
       html.includes(fs.readFileSync(path.resolve(__dirname, "../src/style.css"), "utf8").trim()),
     "one self-contained file with the app code and styles inside",
+  );
+  ok(
+    /window\.countryCoder|globalThis\.countryCoder/.test(html) && !/sourceMappingURL/.test(html),
+    "country lookup library built into the page, without links to outside files",
   );
   ok(!/AIza[0-9A-Za-z_-]{35}/.test(html.replace("AIza…", "")), "no Google key in the key-less build");
 
@@ -83,6 +87,7 @@ const page = path.resolve(__dirname, "../dist/index.nokey.html");
   await p.evaluate(() => {
     localStorage.setItem("lookout2.lang", JSON.stringify("__proto__"));
     localStorage.setItem("lookout2.tagKind", "true");
+    localStorage.setItem("lookout2.scope", JSON.stringify("cov"));
     localStorage.setItem("lookout2.tagName", "true");
     localStorage.setItem(
       "lookout2.osmOwn",
@@ -104,6 +109,7 @@ const page = path.resolve(__dirname, "../dist/index.nokey.html");
     img: document.querySelectorAll('img[src="x"]').length,
     q: document.getElementById("queryText").value,
     old: ["tagKind", "tagName"].filter(k => localStorage.getItem("lookout2." + k) !== null).join(),
+    scope: scope(),
   }));
   console.log("  ", JSON.stringify(t).slice(0, 220));
   ok(
@@ -113,6 +119,10 @@ const page = path.resolve(__dirname, "../dist/index.nokey.html");
       t.x === undefined &&
       t.img === 0,
     "tampered language, server, countries and kind are cleaned or refused",
+  );
+  ok(
+    t.scope === "world",
+    'a saved "Countries with Street View" choice comes back as "Whole world": ' + t.scope,
   );
   ok(t.old === "", "settings of the removed tag options are cleared: " + t.old);
   await p.fill("#kind", "light");

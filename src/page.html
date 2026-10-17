@@ -71,10 +71,7 @@
             <b>Choose what to look at.</b> Type a kind of place and pick a suggestion. You can also give words
             the name must contain.
           </li>
-          <li>
-            <b>Choose where.</b> Tick one or two countries at a time. Searching all
-            <span id="welcomeN">119</span> countries with Street View at once is possible, but slow.
-          </li>
+          <li><b>Choose where.</b> Tick one or two countries, or search the whole world.</li>
           <li><b>Set how close and how many,</b> then select "Find locations".</li>
           <li>
             <b>Review and download.</b> Check the locations on the map or under "List by name", remove the
@@ -89,10 +86,9 @@
         </div>
         <div class="welcome-warn">
           <b>Search one or two countries at a time.</b>
-          Searching all <span id="welcomeN2">119</span> Street View countries at once takes a long time and is
-          likely to run out of time, except for rare kinds of place. In step 2, tick one or two countries, and
-          run the search again for the next ones. "Whole world" is usually faster than all Street View
-          countries, but its locations get no country tag in the map-making.app file.
+          "Whole world" works well for rare kinds of place, but for common ones it takes a long time and is
+          likely to run out of time. Then tick one or two countries in step 2 instead, and run the search
+          again for the next ones. Either way, every location gets its country in the map-making.app file.
         </div>
         <button type="button" class="btn primary" id="welcomeOk">Start</button>
       </div>
@@ -214,14 +210,11 @@
             <label class="radio"
               ><input type="radio" name="scope" value="world" /><span
                 ><b>Whole world</b><br /><span class="hint"
-                  >Includes countries Google has not driven. Locations get no country code.</span
+                  >Every country in one search. Each location still gets its country, found from where it
+                  is.</span
                 ></span
               ></label
             >
-            <label class="radio"
-              ><input type="radio" name="scope" value="cov" /><span
-                ><b>Countries with Street View</b><br /><span class="hint" id="covHint"></span></span
-            ></label>
             <div class="msg note" id="scopeNote" hidden></div>
           </section>
 
@@ -517,9 +510,12 @@
       </div>
     </div>
 
-    <!-- Scripts. The build fills these in and fingerprints them for the security policy: Leaflet (the map library), the place catalogue with the framing check, and src/app.js -->
+    <!-- Scripts. The build fills these in and fingerprints them for the security policy: the libraries
+         (Leaflet for the map, country-coder for finding a place's country), the place catalogue with the
+         framing check, and src/app.js -->
     <script>
       /*LEAFLET_JS*/
+      /*COUNTRY_CODER_JS*/
     </script>
     <script>
       /* Place catalogue: names and search words from the OpenStreetMap iD editor presets
