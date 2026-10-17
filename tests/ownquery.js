@@ -1,6 +1,6 @@
 // "Run your own query" in the expert panel: the query is sent to the configured servers and its answer
 // is used like a loaded Overpass result. Covers adding [out:json], refusing other formats, a full run to
-// the export, "Start from the query above", errors with "Try again", an empty answer, Stop, the
+// the export, "Start from Lookout's query", errors with "Try again", an empty answer, Stop, the
 // remembered query and the user's own server being asked first.
 const { chromium } = require("./pw.js");
 const { PAGE, isSite, serveSite } = require("./site.js");
@@ -59,6 +59,7 @@ const MALTA = [
   await p.goto(PAGE);
   await p.fill("#apiKey", "KEY");
   await p.click("#expert summary");
+  await p.click("#partQuery summary");
 
   // preparing the query
   const prep = await p.evaluate(() => {
@@ -99,15 +100,18 @@ const MALTA = [
     "refused query: message under the field, nothing sent",
   );
 
-  // "Start from the query above"
+  // "Start from Lookout's query"
   await p.fill("#ownQuery", "");
-  await p.click("#ownQueryFromAbove");
-  ok(/no query above yet/.test(await p.textContent("#ownQueryError")), "no query above yet: explained");
+  await p.click("#ownQueryFromLookout");
+  ok(
+    /Lookout has no query yet/.test(await p.textContent("#ownQueryError")),
+    "no query from Lookout yet: explained",
+  );
   await p.fill("#kind", "Lighthouse");
   await p.keyboard.press("Enter");
   await p.check("input[name=scope][value=pick]");
   await p.check("#countries input[value=MT]");
-  await p.click("#ownQueryFromAbove");
+  await p.click("#ownQueryFromLookout");
   ok(
     (await p.inputValue("#ownQuery")) === (await p.inputValue("#queryText")) &&
       /"man_made"="lighthouse"/.test(await p.inputValue("#ownQuery")),
@@ -187,6 +191,10 @@ const MALTA = [
   await p.reload();
   await p.waitForLoadState("load");
   ok((await p.inputValue("#ownQuery")) === mine, "the query is remembered in this browser");
+  ok(
+    await p.evaluate(() => document.getElementById("partQuery").open),
+    "the expert section used last opens again",
+  );
   await p.evaluate(() => (document.getElementById("expert").open = true)); // remembered open or closed
   state.hosts.length = 0;
   await p.click("#ownQueryRun");

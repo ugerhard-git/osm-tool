@@ -73,8 +73,13 @@ const els = [{ type: "area", id: 1, tags: { "ISO3166-1": "MT" } }, N(1, 35.9, 14
     q.waitForFunction(() => !running && !/Ready/.test(document.getElementById("now").textContent));
   const saved = () =>
     p.waitForFunction(() => document.getElementById("srvSave").textContent === "Test and use this server");
+  // The server is set in the Settings dialog; searches run with the dialog closed, as for a visitor.
+  const settings = async () => {
+    if (await p.isHidden("#settings")) await p.click("#settingsBtn");
+  };
   const run = async (q = p) => {
     state.log.length = 0;
+    if (q === p && (await p.isVisible("#settings"))) await p.click("#settingsOk");
     await q.click("#go");
     await done(q);
     return state.log.filter(x => !x.includes("(test)"));
@@ -85,7 +90,23 @@ const els = [{ type: "area", id: 1, tags: { "ISO3166-1": "MT" } }, N(1, 35.9, 14
   await p.keyboard.press("Enter");
   await p.check("input[name=scope][value=pick]");
   await p.check("#countries input[value=MT]");
-  await p.click("#expert summary");
+  ok((await p.textContent("#settingsBtn")) === "Settings", 'no own server: the button just says "Settings"');
+  await p.click("#settingsBtn");
+  ok(
+    (await p.isVisible("#settings")) &&
+      (await p.evaluate(() => document.activeElement.id === "settingsBox")) &&
+      (await p.isHidden("#expert .body #srvUrl")),
+    "Settings opens a dialog with the server fields (no longer in the expert panel)",
+  );
+  await p.keyboard.press("Escape");
+  ok(
+    (await p.isHidden("#settings")) && (await p.evaluate(() => document.activeElement.id === "settingsBtn")),
+    "Escape closes it and the focus goes back to the button",
+  );
+  await p.click("#settingsBtn");
+  await p.mouse.click(5, 5);
+  ok(await p.isHidden("#settings"), "a click outside the box closes it");
+  await p.click("#settingsBtn");
   ok(
     (await p.isChecked("#srvRemember")) &&
       (await p.isChecked("input[name=srvMode][value=first]")) &&
@@ -109,8 +130,16 @@ const els = [{ type: "area", id: 1, tags: { "ISO3166-1": "MT" } }, N(1, 35.9, 14
   );
   // base address: the page finds the working ending
   state.log.length = 0;
+  await settings();
   await p.fill("#srvUrl", BASE);
   await p.click("#srvSave");
+  await p.waitForFunction(
+    () => document.getElementById("srvSave").textContent === "Test and use this server",
+  );
+  ok(
+    (await p.textContent("#settingsBtn")) === "Settings · own server in use",
+    "with a server set, the Settings button says so",
+  );
   await saved();
   console.log("  test requests:", state.log.join(" | ").replace(KEY, "KEY"));
   ok(
@@ -137,6 +166,7 @@ const els = [{ type: "area", id: 1, tags: { "ISO3166-1": "MT" } }, N(1, 35.9, 14
     ),
     "remembered in this browser",
   );
+  await settings();
   await p.evaluate(() => document.getElementById("srvUrl").scrollIntoView({ block: "center" }));
   await p.screenshot({ path: require("path").join(__dirname, "../dist/screens/v1.png") });
   // every search goes to the own server
@@ -180,6 +210,7 @@ const els = [{ type: "area", id: 1, tags: { "ISO3166-1": "MT" } }, N(1, 35.9, 14
   // fallback mode
   state.own = "ok";
   state.pub = "ok";
+  await settings();
   await p.check("input[name=srvMode][value=fallback]");
   ok(
     /only when the public servers fail/.test(await p.textContent("#srvStatus")) &&
@@ -229,9 +260,7 @@ const els = [{ type: "area", id: 1, tags: { "ISO3166-1": "MT" } }, N(1, 35.9, 14
     null,
     { timeout: 10000 },
   );
-  await p.evaluate(() => {
-    document.getElementById("expert").open = true;
-  });
+  await settings();
   ok(
     (await p.evaluate(u => osmOwn && osmOwn.url === u && osmOwn.mode === "fallback", BASE + "interpreter")) &&
       (await p.isChecked("input[name=srvMode][value=fallback]")) &&
@@ -239,6 +268,7 @@ const els = [{ type: "area", id: 1, tags: { "ISO3166-1": "MT" } }, N(1, 35.9, 14
     "restored after a reload",
   );
   // remember off: this tab only
+  await settings();
   await p.uncheck("#srvRemember");
   ok(
     (await p.evaluate(
@@ -252,6 +282,7 @@ const els = [{ type: "area", id: 1, tags: { "ISO3166-1": "MT" } }, N(1, 35.9, 14
   ok(await p2.evaluate(() => osmOwn === null), "not present in another tab when not remembered");
   await p2.close();
   // forget
+  await settings();
   await p.check("#srvRemember");
   await p.click("#srvForget");
   ok(
@@ -267,6 +298,7 @@ const els = [{ type: "area", id: 1, tags: { "ISO3166-1": "MT" } }, N(1, 35.9, 14
     "forget removes it everywhere",
   );
   // unreachable servers
+  await settings();
   await p.fill("#srvUrl", "https://overpass.geofabrik.de/" + KEY + "/");
   await p.click("#srvSave");
   await saved();
@@ -275,6 +307,7 @@ const els = [{ type: "area", id: 1, tags: { "ISO3166-1": "MT" } }, N(1, 35.9, 14
       (await p.evaluate(() => osmOwn === null)),
     "unreachable base address is not saved: " + (await p.textContent("#srvError")).slice(0, 90),
   );
+  await settings();
   await p.fill("#srvUrl", "https://overpass.geofabrik.de/" + KEY + "/api/interpreter");
   await p.click("#srvSave");
   await saved();
@@ -283,7 +316,9 @@ const els = [{ type: "area", id: 1, tags: { "ISO3166-1": "MT" } }, N(1, 35.9, 14
       (await p.evaluate(() => !!osmOwn)),
     "full address is saved with a warning when the test fails",
   );
+  await settings();
   await p.check("input[name=srvMode][value=first]");
+  await p.click("#settingsOk");
   await p.fill("#kind", "Lighthouse");
   await p.keyboard.press("Enter");
   await p.fill("#apiKey", "KEY");
@@ -292,7 +327,12 @@ const els = [{ type: "area", id: 1, tags: { "ISO3166-1": "MT" } }, N(1, 35.9, 14
     log[0] === "geo" && log.some(x => x.startsWith("pub:")) && (await p.evaluate(() => results.length)) === 1,
     "unreachable own server: search still works through the public servers",
   );
+  await settings();
   await p.click("#srvForget");
+  ok(
+    (await p.textContent("#settingsBtn")) === "Settings",
+    "after forgetting, the button says Settings again",
+  );
   ok(errs.length === 0, "no page errors or policy blocks " + errs.join("|"));
   await b.close();
   console.log(fail ? `${fail} FAILED` : "ALL PASS");

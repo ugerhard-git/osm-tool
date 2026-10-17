@@ -35,8 +35,8 @@
  *
  * SAVED IN THE BROWSER (localStorage, each name starts with "lookout2.", see `store`)
  *   kind, nameHas, lang, countries, scope, maxDist, minDist, target, official, tagCountry, tagRoad,
- *   expert (whether that panel is open), ownQuery (the text of your own query) and welcomed
- *   (first-visit dialog seen).
+ *   expert (whether that panel is open), expertPart (its section used last), ownQuery (the text of
+ *   your own query) and welcomed (first-visit dialog seen).
  *   The own server is "lookout2.osmOwn" in localStorage or, if not remembered, sessionStorage.
  *   A visitor's own Google key is only kept in sessionStorage ("lookout2.key"), never on disk.
  *   Saved values and shared links can be edited by anyone, so everything read back is checked first.
@@ -46,9 +46,10 @@
  *     onclick="…" in the HTML would not run.
  *   - Text from outside (OpenStreetMap, taginfo, Google, links, saved values) is put on the page with
  *     textContent, or passed through esc() before it goes into innerHTML.
- *   - The sections below follow the page from top to bottom: data, helpers, step 1, step 2, own server,
- *     own result, shared links, map, list of names, OpenStreetMap, Street View, the search, export,
- *     first-visit dialog. src/page.html and src/style.css use the same section names.
+ *   - The sections below follow the page from top to bottom: data, helpers, step 1, step 2, own server
+ *     (set in the Settings dialog), own result, own query, shared links, map, list of names,
+ *     OpenStreetMap, Street View, the search, export, dialogs (welcome and settings).
+ *     src/page.html and src/style.css use the same section names.
  */
 
 /**
@@ -805,6 +806,23 @@ $("copyQuery").onclick = async () => {
 };
 $("expert").open = store.get("expert", false);
 $("expert").ontoggle = () => store.set("expert", $("expert").open);
+/* The expert panel has three parts (Lookout's query, your own query, a loaded result). Only one is open
+   at a time, and the last one used opens again next time. */
+const EXPERT_PARTS = ["partTurbo", "partQuery", "partLoad"];
+for (const id of EXPERT_PARTS) {
+  $(id).ontoggle = () => {
+    if (!$(id).open) return;
+    for (const other of EXPERT_PARTS) if (other !== id) $(other).open = false;
+    store.set("expertPart", id);
+  };
+}
+{
+  const last = store.get("expertPart", null);
+  if (EXPERT_PARTS.includes(last)) $(last).open = true;
+}
+// "Format requirements" is written once in the page and shown in two parts.
+for (const slot of document.querySelectorAll(".format-slot"))
+  slot.replaceWith($("formatHelp").content.cloneNode(true));
 /* Keeps the expert query and the suggested map name up to date. */
 function suggestName() {
   renderQuery();
@@ -857,7 +875,7 @@ if (kind && kind.tag) {
   }
 } else kind = null;
 
-/* ---------- your own Overpass server ---------- */
+/* ---------- your own Overpass server (in the Settings dialog) ---------- */
 /* Where the own server is kept: localStorage if "remember" is on, else sessionStorage (this tab only). */
 const srvStore = {
   load() {
@@ -952,6 +970,8 @@ async function testServer(url) {
 const srvMode = () => document.querySelector("input[name=srvMode]:checked").value;
 /* Shows which own server is in use and how. */
 function renderServer() {
+  // The Settings button says when your own server is in use, so it shows without opening anything.
+  $("settingsBtn").textContent = osmOwn ? "Settings · own server in use" : "Settings";
   const st = $("srvStatus");
   st.hidden = !osmOwn;
   $("srvForget").hidden = !osmOwn;
@@ -1187,7 +1207,7 @@ const OWN_QUERY_TIMEOUT_MAX = 900; // seconds a query may ask the server for, at
    message for an empty, overlong or non-JSON query. Returns { query, seconds }. */
 function prepareOwnQuery(text) {
   let q = String(text).trim();
-  if (!q) throw new Error('Write a query first, or select "Start from the query above".');
+  if (!q) throw new Error('Write a query first, or select "Start from Lookout\'s query".');
   if (q.length > OWN_QUERY_MAX)
     throw new Error(`The query is longer than ${fmt(OWN_QUERY_MAX)} characters. Shorten it and try again.`);
   const out = /\[out:(\w+)/.exec(q);
@@ -1288,10 +1308,10 @@ async function runOwnQuery() {
 $("ownQuery").value = cleanText(store.get("ownQuery", ""), OWN_QUERY_MAX);
 $("ownQuery").oninput = () => store.set("ownQuery", $("ownQuery").value.slice(0, OWN_QUERY_MAX));
 $("ownQueryRun").onclick = runOwnQuery;
-$("ownQueryFromAbove").onclick = () => {
+$("ownQueryFromLookout").onclick = () => {
   if ($("copyQuery").disabled) {
     const err = $("ownQueryError");
-    err.textContent = "There is no query above yet. Choose a kind of place in step 1 first.";
+    err.textContent = "Lookout has no query yet. Choose a kind of place in step 1 first.";
     err.hidden = false;
     return;
   }
@@ -1840,12 +1860,12 @@ function explainOsm(e, ctx) {
     case "denied":
       return [
         "Your own Overpass server refused the request",
-        'It answered that the address or key is not accepted, or that your quota is used up, and the public servers did not answer either. Check the server address under "Expert" below the button.',
+        'It answered that the address or key is not accepted, or that your quota is used up, and the public servers did not answer either. Check the server address under "Settings" at the top.',
       ];
     case "syntax":
       return [
         "OpenStreetMap rejected the search",
-        'The server could not read the query. This usually comes from an unusual character in a tag or a name in step 1. The exact query is under "Expert" below the button.',
+        'The server could not read the query. This usually comes from an unusual character in a tag or a name in step 1. The exact query is under "Expert", in "The query for Overpass Turbo", below the button.',
       ];
     case "format":
       return [
@@ -3014,37 +3034,59 @@ $("copy").onclick = async () => {
 paint();
 if (fromLink) linkNote();
 
-/* ---------- welcome, shown once per browser ---------- */
-let welcomeBack = null;
-/* The dialog remembers what had the focus and gives it back when closed. */
-function openWelcome() {
-  welcomeBack = document.activeElement;
-  $("welcome").hidden = false;
-  $("welcomeBox").focus({ preventScroll: true });
-  $("welcomeBox").scrollTop = 0; // start reading at the top
-  store.set("welcomed", true);
+/* ---------- dialogs: welcome (shown once per browser) and settings ---------- */
+/* Opens a dialog (an element with class "dialog" around a "dialog-box"). While it is open, Escape and a
+   click outside the box close it, and Tab keeps the keyboard inside the box. When it closes, the focus
+   goes back to where it was. onClose runs after closing. */
+let openDialogEl = null,
+  dialogBack = null,
+  dialogOnClose = null;
+function openDialog(id, onClose) {
+  if (openDialogEl) closeDialog();
+  dialogBack = document.activeElement;
+  dialogOnClose = onClose || null;
+  openDialogEl = $(id);
+  openDialogEl.hidden = false;
+  const box = openDialogEl.querySelector(".dialog-box");
+  box.focus({ preventScroll: true });
+  box.scrollTop = 0; // start reading at the top
 }
-function closeWelcome() {
-  if ($("welcome").hidden) return;
-  $("welcome").hidden = true;
-  reapplyLink();
-  if (welcomeBack && welcomeBack.focus && welcomeBack !== document.body) welcomeBack.focus();
+function closeDialog() {
+  if (!openDialogEl) return;
+  openDialogEl.hidden = true;
+  openDialogEl = null;
+  const back = dialogBack,
+    after = dialogOnClose;
+  dialogOnClose = null;
+  if (after) after();
+  if (back && back.focus && back !== document.body) back.focus();
 }
-$("welcome").onclick = e => {
-  if (e.target === $("welcome")) closeWelcome();
-}; // a click outside the box
-$("welcomeX").onclick = closeWelcome;
-$("welcomeOk").onclick = closeWelcome;
-$("howBtn").onclick = openWelcome;
+document.addEventListener("click", e => {
+  if (openDialogEl && e.target === openDialogEl) closeDialog(); // a click outside the box
+});
 document.addEventListener("keydown", e => {
-  if ($("welcome").hidden) return;
-  if (e.key === "Escape") closeWelcome();
+  if (!openDialogEl) return;
+  if (e.key === "Escape") closeDialog();
   if (e.key === "Tab") {
-    // keep the keyboard inside the box
-    const f = [$("welcomeX"), $("welcomeOk")],
-      i = f.indexOf(document.activeElement);
+    // keep the keyboard inside the box: cycle through what can take the focus there
+    const f = [...openDialogEl.querySelectorAll("button, input, select, textarea, a[href]")].filter(
+      x => !x.disabled && !x.hidden && x.offsetParent !== null,
+    );
+    if (!f.length) return;
+    const i = f.indexOf(document.activeElement);
     e.preventDefault();
     f[(i + (e.shiftKey ? f.length - 1 : 1) + f.length) % f.length].focus();
   }
 });
+
+function openWelcome() {
+  openDialog("welcome", reapplyLink);
+  store.set("welcomed", true);
+}
+$("welcomeX").onclick = closeDialog;
+$("welcomeOk").onclick = closeDialog;
+$("howBtn").onclick = openWelcome;
+$("settingsBtn").onclick = () => openDialog("settings");
+$("settingsX").onclick = closeDialog;
+$("settingsOk").onclick = closeDialog;
 if (!store.get("welcomed", false) && !FRAMED) openWelcome();

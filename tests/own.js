@@ -102,15 +102,17 @@ fs.writeFileSync(path.join(__dirname, "../dist/loose-export.json"), JSON.stringi
   await p.goto(PAGE);
   await p.fill("#apiKey", "KEY");
   await p.click("#expert summary");
-  ok(
-    /Only one format is accepted: raw OSM data as JSON/.test(
-      (await p.textContent("#expert")).replace(/\s+/g, " "),
-    ) &&
-      /GeoJSON, GPX, KML and XML files are not accepted/.test(
-        (await p.textContent("#expert")).replace(/\s+/g, " "),
-      ),
-    "format constraint stated in the panel",
-  );
+  await p.click("#partLoad summary");
+  await p.click("#partLoad .fmt summary");
+  {
+    const fmt = (await p.textContent("#partLoad .fmt")).replace(/\s+/g, " ");
+    ok(
+      /Only raw OSM data as JSON can be read/.test(fmt) &&
+        /GeoJSON, GPX, KML and XML are not accepted/.test(fmt) &&
+        (await p.isVisible("#partLoad .fmt li")),
+      "format requirements stated in the load section",
+    );
+  }
   await p.evaluate(() => document.getElementById("ownText").scrollIntoView({ block: "center" }));
   await p.screenshot({ path: require("path").join(__dirname, "../dist/screens/l1.png") });
   const bad = {

@@ -25,7 +25,7 @@ const { PAGE, isSite, serveSite } = require("./site.js");
     (await p.isVisible("#welcome")) && (await p.evaluate(() => document.activeElement.id === "welcomeBox")),
     "shown on the first visit, focus inside",
   );
-  const t = await p.innerText(".welcome-box");
+  const t = await p.innerText("#welcomeBox");
   console.log(
     t
       .split("\n")
@@ -47,7 +47,7 @@ const { PAGE, isSite, serveSite } = require("./site.js");
     "says every location gets its country; no mention of the removed option",
   );
   await p.screenshot({ path: require("path").join(__dirname, "../dist/screens/w1.png") });
-  await p.click(".welcome-box h2");
+  await p.click("#welcomeBox h2");
   ok(await p.isVisible("#welcome"), "a click inside the box does not close it");
   await p.mouse.click(20, 20);
   ok(await p.isHidden("#welcome"), "a click outside the box closes it");
@@ -90,13 +90,13 @@ const { PAGE, isSite, serveSite } = require("./site.js");
   await m.screenshot({ path: require("path").join(__dirname, "../dist/screens/w2.png") });
   ok(
     await m.evaluate(() => {
-      const r = document.querySelector(".welcome-box").getBoundingClientRect();
+      const r = document.querySelector("#welcomeBox").getBoundingClientRect();
       return r.left >= 0 && r.right <= innerWidth && r.bottom <= innerHeight + 1;
     }),
     "fits a phone screen",
   );
   ok(
-    (await m.evaluate(() => document.querySelector(".welcome-box").scrollTop === 0)) &&
+    (await m.evaluate(() => document.querySelector("#welcomeBox").scrollTop === 0)) &&
       (await m.isVisible("#welcomeTitle")),
     "opens scrolled to the top on a phone",
   );

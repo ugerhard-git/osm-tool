@@ -177,6 +177,7 @@ const els = [
   await p.click("#failClose");
   // own result mode hides the recheck button
   await p.click("#expert summary");
+  await p.click("#partLoad summary");
   await p.fill("#ownText", JSON.stringify({ elements: els }));
   await p.click("#ownUse");
   ok(await p.isHidden("#againBox"), "hidden while an own Overpass result is loaded");
