@@ -628,6 +628,27 @@ code {
 .qrow .btn {
   padding: 7px 12px;
 }
+/* A button with its checkbox, kept on one line ("Run this query" + "Also check Street View") */
+.qrow .qgroup {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+/* A checkbox in a row of buttons, such as "Also check Street View" */
+.qrow .inlinecheck {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: 0;
+  font-weight: 400;
+  cursor: pointer;
+}
+.qrow .inlinecheck input {
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  accent-color: var(--blue);
+}
 #srvUrl {
   margin-bottom: 10px;
 }

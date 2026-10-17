@@ -36,7 +36,8 @@
  * SAVED IN THE BROWSER (localStorage, each name starts with "lookout2.", see `store`)
  *   kind, nameHas, lang, countries, scope, maxDist, minDist, target, official, tagCountry, tagRoad,
  *   expert (whether that panel is open), expertPart (its section used last), ownQuery (the text of
- *   your own query) and welcomed (first-visit dialog seen).
+ *   your own query), ownQueryAuto (check Street View right after your own query) and welcomed
+ *   (first-visit dialog seen).
  *   The own server is "lookout2.osmOwn" in localStorage or, if not remembered, sessionStorage.
  *   A visitor's own Google key is only kept in sessionStorage ("lookout2.key"), never on disk.
  *   Saved values and shared links can be edited by anyone, so everything read back is checked first.
@@ -1303,11 +1304,17 @@ async function runOwnQuery() {
     err.textContent = e.message;
     err.hidden = false;
     paint("Ready.");
+    return;
   }
+  // "Also check Street View": the same as selecting "Find locations" now, with the current
+  // settings for distance, number of locations and tags.
+  if ($("ownQueryAuto").checked) startSearch(null);
 }
 $("ownQuery").value = cleanText(store.get("ownQuery", ""), OWN_QUERY_MAX);
 $("ownQuery").oninput = () => store.set("ownQuery", $("ownQuery").value.slice(0, OWN_QUERY_MAX));
 $("ownQueryRun").onclick = runOwnQuery;
+$("ownQueryAuto").checked = store.get("ownQueryAuto", false) === true;
+$("ownQueryAuto").onchange = () => store.set("ownQueryAuto", $("ownQueryAuto").checked);
 $("ownQueryFromLookout").onclick = () => {
   if ($("copyQuery").disabled) {
     const err = $("ownQueryError");
