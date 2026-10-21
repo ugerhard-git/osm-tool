@@ -1,6 +1,6 @@
 # Lookout (osm-tool)
 
-Lookout builds maps for [map-making.app](https://map-making.app) and GeoGuessr: Street View locations that stand near one kind of place and face it. Every lighthouse, windmill or castle with Street View nearby, for example.
+Lookout builds maps for [map-making.app](https://map-making.app) and GeoGuessr: Street View locations that stand near a kind of place and face it. Every lighthouse, windmill or castle with Street View nearby, for example.
 
 It runs entirely in the browser as a single HTML page. There is no server of its own.
 
@@ -8,7 +8,7 @@ It runs entirely in the browser as a single HTML page. There is no server of its
 
 ## How it works
 
-1. **Find the places.** The kind of place (an OpenStreetMap tag such as `man_made=lighthouse`, chosen through a searchable catalogue in English, German, French, Spanish and Portuguese) and optional name words are turned into an [Overpass API](https://wiki.openstreetmap.org/wiki/Overpass_API) query. Searches over chosen countries are sent in parts, a few countries at a time; parts that time out are split and retried. A whole-world search is a single query.
+1. **Find the places.** Up to three kinds of place (each an OpenStreetMap tag such as `man_made=lighthouse`, chosen through a searchable catalogue in English, German, French, Spanish and Portuguese) and optional name words are turned into an [Overpass API](https://wiki.openstreetmap.org/wiki/Overpass_API) query that finds places of any of those kinds. Searches over chosen countries are sent in parts, a few countries at a time; parts that time out are split and retried. A whole-world search is a single query.
 2. **Check Street View.** For each place, Google's free Street View metadata service is asked for the nearest panorama within the chosen distance. If the nearest one is a user photo, a second, official-only look is made.
 3. **Face the place.** Each accepted location gets a heading from the panorama towards the place.
 4. **Export.** The result downloads as a map-making.app JSON file with each location's country code, optionally tagged with the country and with whether a road name is shown. Where OpenStreetMap's answer does not say which country a place is in (a whole-world search, your own Overpass result), the country is found from the place's position, offline in the browser.

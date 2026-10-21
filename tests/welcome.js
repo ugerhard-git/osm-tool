@@ -2,6 +2,7 @@
 // outside, reopened by "How it works"; it keeps the keyboard inside while open and gives the focus back.
 const { chromium } = require("playwright");
 const { PAGE, isSite, serveSite } = require("./site.js");
+const { kindLabels } = require("./helpers.js");
 (async () => {
   const b = await chromium.launch();
   let fail = 0;
@@ -101,7 +102,7 @@ const { PAGE, isSite, serveSite } = require("./site.js");
     "opens scrolled to the top on a phone",
   );
   await m.click("#welcomeOk");
-  ok((await m.inputValue("#kind")) === "Lighthouse", "page underneath is ready after closing");
+  ok((await kindLabels(m)) === "Lighthouse", "page underneath is ready after closing");
   ok(errs.length === 0, "no page errors " + errs.join("|"));
   await b.close();
   console.log(fail ? `${fail} FAILED` : "ALL PASS");

@@ -4,6 +4,7 @@ const { chromium } = require("./pw.js");
 const { SITE, PAGE, isSite, serveSite } = require("./site.js");
 const path = require("path");
 const fs = require("fs");
+const { clearKinds } = require("./helpers.js");
 const page = path.resolve(__dirname, "../dist/index.nokey.html");
 (async () => {
   const b = await chromium.launch();
@@ -95,8 +96,17 @@ const page = path.resolve(__dirname, "../dist/index.nokey.html");
     );
     localStorage.setItem("lookout2.countries", JSON.stringify(["DE", "<b>", "__proto__"]));
     localStorage.setItem(
-      "lookout2.kind",
-      JSON.stringify({ label: "<img src=x onerror=window.__x=1>", tag: 'a"]; out; ("' }),
+      "lookout2.kinds",
+      JSON.stringify([
+        { label: "<img src=x onerror=window.__x=1>", tag: 'a"]; out; ("' },
+        "junk",
+        null,
+        { tag: "historic=castle" },
+        { tag: "historic=castle" },
+        { tag: "man_made=lighthouse" },
+        { tag: "amenity=pub|bar" },
+        { tag: "tourism=viewpoint" },
+      ]),
     );
   });
   await p.reload();
@@ -110,6 +120,7 @@ const page = path.resolve(__dirname, "../dist/index.nokey.html");
     q: document.getElementById("queryText").value,
     old: ["tagKind", "tagName"].filter(k => localStorage.getItem("lookout2." + k) !== null).join(),
     scope: scope(),
+    kinds: kinds.map(k => k.tag).join(" | "),
   }));
   console.log("  ", JSON.stringify(t).slice(0, 220));
   ok(
@@ -121,10 +132,28 @@ const page = path.resolve(__dirname, "../dist/index.nokey.html");
     "tampered language, server, countries and kind are cleaned or refused",
   );
   ok(
+    t.kinds === "historic=castle | man_made=lighthouse | amenity=pub|bar",
+    "tampered kinds: broken tags and repeats dropped, at most 3 kept: " + t.kinds,
+  );
+  // a browser that saved one kind before several were possible: it is moved over, the old entry removed
+  await p.evaluate(() => {
+    localStorage.removeItem("lookout2.kinds");
+    localStorage.setItem("lookout2.kind", JSON.stringify({ label: "Windmill", tag: "man_made=windmill" }));
+  });
+  await p.reload();
+  await p.waitForTimeout(300);
+  ok(
+    (await p.evaluate(() => kinds.map(k => k.tag).join())) === "man_made=windmill" &&
+      (await p.evaluate(() => localStorage.getItem("lookout2.kind"))) === null &&
+      /man_made=windmill/.test(await p.evaluate(() => localStorage.getItem("lookout2.kinds"))),
+    "a single saved kind from before is kept as one chip and saved the new way",
+  );
+  ok(
     t.scope === "world",
     'a saved "Countries with Street View" choice comes back as "Whole world": ' + t.scope,
   );
   ok(t.old === "", "settings of the removed tag options are cleared: " + t.old);
+  await clearKinds(p);
   await p.fill("#kind", "light");
   await p.waitForTimeout(200);
   ok((await p.$$("#suggest li")).length > 0, "suggestions still work after a bad stored language");

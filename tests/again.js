@@ -2,6 +2,7 @@
 // last OpenStreetMap search, with new settings, and keeps those places when step 1 changes.
 const { chromium } = require("./pw.js");
 const { PAGE, isSite, serveSite } = require("./site.js");
+const { chooseKind } = require("./helpers.js");
 const H = { "access-control-allow-origin": "*" };
 const N = (id, lat, lon, name) => ({ type: "node", id, lat, lon, tags: { name } });
 const els = [
@@ -74,8 +75,7 @@ const els = [
   await p.goto(PAGE);
   await p.fill("#maxDist", "25");
   await p.fill("#apiKey", "KEY");
-  await p.fill("#kind", "Lighthouse");
-  await p.keyboard.press("Enter");
+  await chooseKind(p, "Lighthouse");
   await p.check("input[name=scope][value=pick]");
   await p.check("#countries input[value=MT]");
   ok(await p.isHidden("#againBox"), "recheck button hidden before any search");
@@ -140,8 +140,7 @@ const els = [
     'recheck honours "Locations wanted"',
   );
   // editing step 1 afterwards does not change what the recheck uses
-  await p.fill("#kind", "Windmill");
-  await p.keyboard.press("Enter");
+  await chooseKind(p, "Windmill");
   await p.fill("#target", "500");
   await p.fill("#mapName", "My own name");
   await p.click("#again");

@@ -2,6 +2,7 @@
 // around the place when the script cannot be used), and the reason recorded for every failed lookup.
 const { chromium } = require("./pw.js");
 const { PAGE, isSite, serveSite } = require("./site.js");
+const { chooseKind } = require("./helpers.js");
 const H = { "access-control-allow-origin": "*" };
 const P = (id, lat, lon, name) => ({ type: "node", id, lat, lon, tags: { name } });
 const off = (lat, lng, name) => ({
@@ -53,8 +54,7 @@ async function run(b, name, { places, rest, js, check }) {
   await p.goto(PAGE);
   await p.fill("#maxDist", "25");
   await p.fill("#apiKey", "KEY");
-  await p.fill("#kind", "Lighthouse");
-  await p.keyboard.press("Enter");
+  await chooseKind(p, "Lighthouse");
   await p.check("input[name=scope][value=pick]");
   await p.check("#countries input[value=MT]");
   await p.click("#go");

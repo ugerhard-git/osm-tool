@@ -2,13 +2,14 @@
 /*
  * Lookout: the app code.
  *
- * Lookout finds Google Street View spots near OpenStreetMap places of one kind (lighthouses, castles, …)
+ * Lookout finds Google Street View spots near OpenStreetMap places of up to three kinds (lighthouses, castles, …)
  * and exports them as a map-making.app map, each camera turned towards its place. Everything runs in the
  * visitor's browser; there is no server of our own. The build (src/build.js) puts this file, the styles
  * and the markup into one page.
  *
  * HOW A SEARCH RUNS (see startSearch)
- *   1. Step 1 sets `kind` (a tag such as historic=castle) and/or words the name must contain.
+ *   1. Step 1 sets `kinds` (up to three tags such as historic=castle; places of any of them are found)
+ *      and/or words the name must contain.
  *      Step 2 sets where: chosen countries, or the whole world. Places whose answer names no country get
  *      one from their position (countryAt).
  *   2. buildQuery() writes the Overpass query. fetchPlaces() sends it in parts of a few countries
@@ -24,7 +25,7 @@
  *      (renderNames) and exported (exportJson). paint() keeps the counters and messages up to date.
  *
  * MAIN SHARED STATE
- *   kind         the kind of place from step 1: { label, tag, raw?, count? }, or null
+ *   kinds        the kinds of place from step 1, up to MAX_KINDS: [{ label, tag, raw?, count? }]
  *   selected     Set of the country codes ticked in step 2
  *   ownResult    the user's own Overpass result once loaded (see parseOwn), else null
  *   osmOwn       the user's own Overpass server: { url, mode: "first" | "fallback" }, or null
@@ -34,7 +35,8 @@
  *   running      true while a search runs; abort.abort() stops it
  *
  * SAVED IN THE BROWSER (localStorage, each name starts with "lookout2.", see `store`)
- *   kind, nameHas, lang, countries, scope, maxDist, minDist, target, official, tagCountry, tagRoad,
+ *   kinds (formerly one "kind", moved over on load), nameHas, lang, countries, scope, maxDist, minDist,
+ *   target, official, tagCountry, tagRoad,
  *   expert (whether that panel is open), expertPart (its section used last), ownQuery (the text of
  *   your own query), ownQueryAuto (check Street View right after your own query) and welcomed
  *   (first-visit dialog seen).
@@ -320,7 +322,8 @@ function nameFilter() {
 function searchLabel() {
   const w = nameWords(),
     n = w.length ? w[0].charAt(0).toUpperCase() + w[0].slice(1) : "";
-  return kind ? (n ? `${kind.label}: ${n}` : kind.label) : n;
+  const what = kinds.length ? kindsLabel() : "";
+  return what ? (n ? `${what}: ${n}` : what) : n;
 }
 /* Overpass filter for the tags of a kind of place: "historic=castle, ruins=yes" -> ["historic"="castle"]["ruins"="yes"]. */
 function tagFilter(text) {
@@ -496,8 +499,13 @@ function worldCount(tag) {
   return countCache.get(tag);
 }
 
-/* ---------- step 1: kind picker ---------- */
-let kind = store.get("kind", null); // {label, tag, count?}
+/* ---------- step 1: kind picker ----------
+   Up to MAX_KINDS kinds of place, shown as chips. A search finds places of any of them ("or"). The field
+   holds the text for the next kind; a suggestion (or a typed key=value tag) becomes a chip. */
+const MAX_KINDS = 3;
+/** @type {{label: string, tag: string, raw?: boolean, count?: number|null}[]} */
+let kinds = [];
+let addingKind = false; // the field is shown for another kind after "+ Add another kind of place"
 let items = [],
   active = -1,
   searchSeq = 0,
@@ -512,6 +520,41 @@ for (const [code, name] of Object.entries(LANGS)) {
   $("lang").append(o);
 }
 $("lang").value = lang;
+
+/* The kinds as a phrase: "Lighthouse", "Lighthouse or Light beacon", "Lighthouse + 2 more". */
+function kindsLabel() {
+  if (kinds.length <= 2) return kinds.map(k => k.label).join(" or ");
+  return `${kinds[0].label} + ${kinds.length - 1} more`;
+}
+/* One Overpass filter per kind, each with the "Name contains" words; just the name filter without a
+   kind; [] when step 1 is empty. Throws a readable message for a name word that is too short. */
+function searchFilters() {
+  const named = nameFilter();
+  if (!kinds.length) return named ? [named] : [];
+  return kinds.map(k => tagFilter(k.tag) + named);
+}
+/* Kinds read from outside (saved settings, a shared link): only valid tags, no repeats, at most
+   MAX_KINDS, labelled in the current language. tags: list of tag texts. */
+function cleanKinds(tags) {
+  const out = [];
+  for (const raw of tags) {
+    const tag = cleanText(raw, 300).trim();
+    if (!tag || out.some(k => k.tag === tag) || out.length >= MAX_KINDS) continue;
+    try {
+      parseTags(tag);
+    } catch {
+      continue;
+    }
+    const name = catName(tag);
+    out.push({ label: name || tag, tag, raw: !name });
+  }
+  return out;
+}
+/* Upper bound for how many places match all kinds together, or null if a count is missing. */
+function kindsCount() {
+  if (!kinds.length || kinds.some(k => typeof k.count !== "number")) return null;
+  return kinds.reduce((n, k) => n + k.count, 0);
+}
 
 /* Shows the suggestion list under the field: catalogue matches, then taginfo matches. */
 function renderSuggest(cat, more, loading) {
@@ -552,18 +595,28 @@ function closeSuggest() {
   searchAbort?.abort();
   clearTimeout(searchTimer);
 }
+/* A typed key=value tag as a suggestion, or null if it is not a valid tag. */
+function typedTag(text) {
+  const t = text.trim();
+  try {
+    parseTags(t);
+  } catch {
+    return null;
+  }
+  return { label: catName(t) || t, tag: t, raw: !catName(t), typed: true };
+}
 /* Typing in "Kind of place": catalogue matches at once, taginfo matches after a short pause (350 ms)
-   so that not every keystroke goes to taginfo. searchSeq drops answers that arrive after newer typing. */
+   so that not every keystroke goes to taginfo. searchSeq drops answers that arrive after newer typing.
+   Text with "=" is a tag written by hand: it is offered as the only suggestion. */
 function onKindInput() {
   const text = kindEl.value;
-  kind = null;
-  renderPicked();
   searchAbort?.abort();
   clearTimeout(searchTimer);
   const seq = ++searchSeq;
   if (text.includes("=")) {
-    closeSuggest();
-    rawKind();
+    const t = typedTag(text);
+    if (t) renderSuggest([{ ...t, label: "Use the tag you typed" }], [], false);
+    else closeSuggest();
     return;
   }
   const cat = searchCatalogue(text);
@@ -581,75 +634,115 @@ function onKindInput() {
     renderSuggest(cat, more.filter(m => !have.has(m.tag)).slice(0, 6), false);
   }, 350);
 }
-/* Text typed as key=value is used as it is. */
-function rawKind() {
-  const text = kindEl.value.trim();
-  try {
-    parseTags(text);
-    kind = { label: catName(text) || text, tag: text, raw: true };
-  } catch {
-    kind = null;
-  }
+/* Adds a kind (a picked suggestion or a typed tag) as a chip. The same tag twice is ignored. */
+function addKind(it) {
+  if (it.typed) it = typedTag(it.tag) || it;
+  if (kinds.length < MAX_KINDS && !kinds.some(k => k.tag === it.tag))
+    kinds.push({ label: it.label, tag: it.tag, raw: !!it.raw });
+  kindEl.value = "";
+  addingKind = false;
+  closeSuggest();
+  renderKinds();
   renderPicked();
 }
 /* A suggestion was picked. */
-function choose(it) {
-  kind = { label: it.label, tag: it.tag };
-  kindEl.value = it.label;
-  closeSuggest();
+const choose = addKind;
+function removeKind(tag) {
+  kinds = kinds.filter(k => k.tag !== tag);
+  renderKinds();
   renderPicked();
+  if (!kinds.length) kindEl.focus();
+}
+/* Draws the chips, and shows either the field or "+ Add another kind of place". */
+function renderKinds() {
+  const chips = $("kindChips");
+  chips.textContent = "";
+  for (const k of kinds) {
+    // (built directly: this runs while the page loads, before makeElement further down exists)
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "chip";
+    b.textContent = k.label;
+    b.title = k.tag;
+    b.setAttribute("aria-label", `Remove ${k.label}`);
+    b.onclick = () => removeKind(k.tag);
+    chips.append(b);
+  }
+  chips.hidden = !kinds.length;
+  const full = kinds.length >= MAX_KINDS;
+  $("kindCombo").hidden = full || (kinds.length > 0 && !addingKind);
+  $("addKind").hidden = !kinds.length || full || addingKind;
+  $("kindsFull").hidden = !full;
+  kindEl.placeholder = kinds.length
+    ? "Another kind of place, for example beacon"
+    : "Start typing, for example lighthouse";
 }
 /* Saves step 1 and shows below it what will be searched, with the worldwide count from taginfo. */
 function renderPicked() {
   const el = $("picked"),
     words = nameWords();
   suggestName();
-  store.set("kind", kind ? { label: kind.label, tag: kind.tag, raw: kind.raw } : null);
+  store.set(
+    "kinds",
+    kinds.map(k => ({ label: k.label, tag: k.tag, raw: k.raw })),
+  );
   store.set("nameHas", $("nameHas").value);
-  if (!kind && !words.length) {
+  if (!kinds.length && !words.length) {
     el.hidden = true;
     return;
   }
   const named = words.length
     ? ` with a name containing ${words.map(w => `<code>${esc(w)}</code>`).join(" or ")}`
     : "";
-  if (!kind) {
+  if (!kinds.length) {
     el.innerHTML = `Searching for any place${named}<span class="warn">A name search without a kind of place is slow. It needs "Only the countries I choose" in step 2.</span>`;
     el.hidden = false;
     return;
   }
-  const first = parseTags(kind.tag)[0];
-  const url =
-    first.values && first.values.length === 1
-      ? `https://taginfo.openstreetmap.org/tags/${encodeURIComponent(first.key)}=${encodeURIComponent(first.values[0])}`
-      : `https://taginfo.openstreetmap.org/keys/${encodeURIComponent(first.key)}`;
-  const tag = kind.tag;
-  const paint = count => {
-    if (!kind || kind.tag !== tag) return;
-    let h = `Searching for <code>${esc(tag)}</code>${named}`;
-    if (count === undefined) h += `<br><span class="hint">Counting them on OpenStreetMap…</span>`;
-    else if (count === null)
-      h += `<br><a href="${url}" target="_blank" rel="noopener">See this tag on taginfo</a>`;
+  const tags = kinds.map(k => k.tag).join("\n");
+  const one = kinds.length === 1 ? kinds[0] : null;
+  let url = "";
+  if (one) {
+    const first = parseTags(one.tag)[0];
+    url =
+      first.values && first.values.length === 1
+        ? `https://taginfo.openstreetmap.org/tags/${encodeURIComponent(first.key)}=${encodeURIComponent(first.values[0])}`
+        : `https://taginfo.openstreetmap.org/keys/${encodeURIComponent(first.key)}`;
+  }
+  const paint = () => {
+    if (kinds.map(k => k.tag).join("\n") !== tags) return; // step 1 changed meanwhile
+    const counts = kinds.map(k => k.count);
+    let h = `Searching for ${kinds.map(k => `<code>${esc(k.tag)}</code>`).join(" or ")}${named}`;
+    if (counts.some(c => c === undefined))
+      h += `<br><span class="hint">Counting them on OpenStreetMap…</span>`;
+    else if (counts.some(c => c === null))
+      h += one
+        ? `<br><a href="${url}" target="_blank" rel="noopener">See this tag on taginfo</a>`
+        : `<br><span class="hint">They could not all be counted.</span>`;
     else {
-      const multi = parseTags(tag).length > 1;
-      h += `<br>${count === 0 ? "None" : (multi ? "At most " : "About ") + fmt(count)} on OpenStreetMap worldwide${named ? ", before the name filter" : ""}. <a href="${url}" target="_blank" rel="noopener">Details</a>`;
-      if (count === 0) h += `<span class="warn">Nothing uses this tag. Check the spelling.</span>`;
-      else if (count > TOO_MANY && !named)
+      const total = kindsCount();
+      const atMost = !one || parseTags(one.tag).length > 1; // a sum, or the rarest of combined tags
+      h += `<br>${total === 0 ? "None" : (atMost ? "At most " : "About ") + fmt(total)} on OpenStreetMap worldwide${named ? ", before the name filter" : ""}.${one ? ` <a href="${url}" target="_blank" rel="noopener">Details</a>` : ""}`;
+      if (total === 0)
+        h += `<span class="warn">Nothing uses ${one ? "this tag" : "these tags"}. Check the spelling.</span>`;
+      else if (total > TOO_MANY && !named)
         h += `<span class="warn">That is a lot. Choose "Only the countries I choose" in step 2.</span>`;
     }
     el.innerHTML = h;
     el.hidden = false;
   };
-  paint(undefined);
-  worldCount(tag).then(c => {
-    if (kind && kind.tag === tag) kind.count = c;
-    paint(c);
-  });
+  paint();
+  for (const k of kinds)
+    if (k.count === undefined)
+      worldCount(k.tag).then(c => {
+        k.count = c;
+        paint();
+      });
 }
 $("nameHas").addEventListener("input", renderPicked);
 kindEl.addEventListener("input", onKindInput);
 kindEl.addEventListener("focus", () => {
-  if (!kind && kindEl.value.trim().length >= 2) onKindInput();
+  if (kindEl.value.trim().length >= 2) onKindInput();
 });
 kindEl.addEventListener("keydown", e => {
   if (listEl.hidden) {
@@ -676,28 +769,42 @@ listEl.addEventListener("mousedown", e => {
     choose(items[+li.dataset.i]);
   }
 });
-kindEl.addEventListener("blur", () => setTimeout(closeSuggest, 120));
+kindEl.addEventListener("blur", () =>
+  setTimeout(() => {
+    closeSuggest();
+    // Leaving the empty field after "+ Add another kind of place" puts the link back.
+    if (addingKind && !kindEl.value.trim() && document.activeElement !== kindEl) {
+      addingKind = false;
+      renderKinds();
+    }
+  }, 120),
+);
+$("addKind").onclick = () => {
+  addingKind = true;
+  renderKinds();
+  kindEl.focus();
+};
 $("examples").innerHTML = EXAMPLES.map(
   t => `<button type="button" data-t="${esc(t)}"><code>${esc(t)}</code></button>`,
 ).join("");
 $("examples").onclick = e => {
   const b = e.target.closest("button");
-  if (b) {
-    kindEl.value = b.dataset.t;
-    rawKind();
-    kindEl.focus();
-  }
+  if (b) addKind(typedTag(b.dataset.t));
 };
 $("lang").onchange = () => {
   lang = $("lang").value;
   store.set("lang", lang);
-  if (kind) {
-    const n = catName(kind.tag);
-    if (n) {
-      kind.label = n;
-      kindEl.value = n;
-      renderPicked();
+  let changed = false;
+  for (const k of kinds) {
+    const n = catName(k.tag);
+    if (n && n !== k.label) {
+      k.label = n;
+      changed = true;
     }
+  }
+  if (changed) {
+    renderKinds();
+    renderPicked();
   }
 };
 
@@ -780,8 +887,8 @@ function renderQuery() {
   try {
     const s = scope(),
       codes = s === "world" ? null : [...selected];
-    const filter = (kind ? tagFilter(kind.tag) : "") + nameFilter();
-    if (!filter) text = "Choose a kind of place or enter a name in step 1.";
+    const filter = searchFilters();
+    if (!filter.length) text = "Choose a kind of place or enter a name in step 1.";
     else if (codes && !codes.length) text = "Tick one or more countries in step 2.";
     else {
       text = buildQuery(filter, codes, true, true);
@@ -866,15 +973,17 @@ $("tagRoad").checked = store.get("tagRoad", false);
 $("keyBox").hidden = !!GOOGLE_API_KEY;
 $("apiKey").value = keyStore.get();
 $("nameHas").value = store.get("nameHas", "");
-if (kind && kind.tag) {
+{
+  // Saved kinds; before several kinds were possible, one kind was saved as "kind". It is moved over.
+  const saved = store.get("kinds", null);
+  const old = store.get("kind", null);
+  const list = Array.isArray(saved) ? saved : old && typeof old === "object" ? [old] : [];
+  kinds = cleanKinds(list.map(k => (k && typeof k === "object" ? k.tag : "")));
   try {
-    parseTags(kind.tag);
-    kind.label = catName(kind.tag) || kind.label;
-    kindEl.value = kind.raw ? kind.tag : kind.label;
-  } catch {
-    kind = null;
-  }
-} else kind = null;
+    localStorage.removeItem("lookout2.kind");
+  } catch {}
+  renderKinds();
+}
 
 /* ---------- your own Overpass server (in the Settings dialog) ---------- */
 /* Where the own server is kept: localStorage if "remember" is on, else sessionStorage (this tab only). */
@@ -1336,7 +1445,7 @@ $("ownQueryFromLookout").onclick = () => {
 function shareLink() {
   const q = new URLSearchParams(),
     s = scope();
-  if (kind) q.set("k", kind.tag);
+  for (const k of kinds) q.append("k", k.tag); // one k= per kind
   const n = $("nameHas").value.trim();
   if (n) q.set("n", n);
   q.set("s", s);
@@ -1376,17 +1485,11 @@ function applyLink() {
     const v = Math.round(Number(q.get(key)));
     if (q.has(key) && Number.isFinite(v)) $(id).value = Math.min(hi, Math.max(lo, v));
   };
-  const k = cleanText(q.get("k"), 300).trim();
-  kind = null;
+  // One k= per kind (older links have just one). Broken tags are dropped, and at most MAX_KINDS kept.
+  kinds = cleanKinds(q.getAll("k").slice(0, 10));
   kindEl.value = "";
-  if (k) {
-    try {
-      parseTags(k);
-      const name = catName(k);
-      kind = { label: name || k, tag: k, raw: !name };
-      kindEl.value = name || k;
-    } catch {}
-  }
+  addingKind = false;
+  renderKinds();
   $("nameHas").value = cleanText(q.get("n"), 200);
   const s = scopeValue(q.get("s"));
   if (s) document.querySelector(`input[name=scope][value=${s}]`).checked = true;
@@ -1407,7 +1510,7 @@ function applyLink() {
 $("share").onclick = async () => {
   const b = $("share");
   if (ownResult) return;
-  if (!kind && !nameWords().length)
+  if (!kinds.length && !nameWords().length)
     return show(
       "error",
       "Choose a kind of place or enter a name in step 1 first. Then the link has something to share.",
@@ -1886,20 +1989,19 @@ function explainOsm(e, ctx) {
       ];
   }
 }
-/* The Overpass query. codes: list of country codes, or null for the whole world.
+/* The Overpass query. filters: one filter per kind of place (see searchFilters); places matching any
+   of them are found. codes: list of country codes, or null for the whole world.
    grouped: results arrive per country, each group led by its country area. */
-function buildQuery(filter, codes, grouped = true, pretty = false, seconds = WORLD_TIMEOUT) {
+function buildQuery(filters, codes, grouped = true, pretty = false, seconds = WORLD_TIMEOUT) {
   const nl = pretty ? "\n" : "",
     ind = pretty ? "  " : "";
+  const list = Array.isArray(filters) ? filters : [filters];
+  // One kind: the plain statements. Several: their union, written as ( …; …; ).
+  const nodes = set =>
+    list.length === 1 ? `node${list[0]}${set};` : `(${list.map(f => `node${f}${set};`).join("")});`;
+  const outlines = set => `(${list.map(f => `way${f}${set};relation${f}${set};`).join("")});`;
   const body = (set, i) =>
-    [
-      `node${filter}${set};`,
-      "out body;",
-      `(way${filter}${set};relation${filter}${set};);`,
-      "out tags center;",
-    ]
-      .map(l => i + l)
-      .join(nl);
+    [nodes(set), "out body;", outlines(set), "out tags center;"].map(l => i + l).join(nl);
   const head = `[out:json][timeout:${seconds}];`;
   if (!codes) return head + nl + body("", "");
   const areas = `area["ISO3166-1"~"^(${codes.join("|")})$"]->.all;`;
@@ -2632,15 +2734,17 @@ async function startSearch(reuse) {
     (ownResult ? { places: ownResult.places, skipped: [], label: ownLabel(), name: ownLabel() } : null);
   let words = [];
   if (!ownRun) {
-    if (!kind) {
-      // typed but not picked: accept an exact catalogue name
-      const hit = searchCatalogue(kindEl.value, 1)[0];
-      if (hit && foldAccents(hit.label) === foldAccents(kindEl.value.trim())) choose(hit);
+    const draft = kindEl.value.trim();
+    if (draft) {
+      // typed but not picked: accept an exact catalogue name, or a tag written as key=value
+      const hit = searchCatalogue(draft, 1)[0];
+      if (hit && foldAccents(hit.label) === foldAccents(draft)) addKind(hit);
+      else if (draft.includes("=") && typedTag(draft)) addKind(typedTag(draft));
+      else return show("error", "Pick one of the suggestions in step 1, or write a tag as key=value.");
     }
     words = nameWords();
-    if (!kind && kindEl.value.trim())
-      return show("error", "Pick one of the suggestions in step 1, or write a tag as key=value.");
-    if (!kind && !words.length) return show("error", "Choose a kind of place or enter a name in step 1.");
+    if (!kinds.length && !words.length)
+      return show("error", "Choose a kind of place or enter a name in step 1.");
   }
   const key = GOOGLE_API_KEY || $("apiKey").value.trim();
   const maxDist = Math.max(5, +$("maxDist").value || 50);
@@ -2655,10 +2759,10 @@ async function startSearch(reuse) {
   // A whole-world search, or a re-check of one: places in countries without official Street View are
   // skipped when only official coverage is wanted (see below).
   const wholeWorld = reuse ? !!reuse.world : !ownResult && sc === "world";
-  let filter = "";
+  let filter = [];
   if (!ownRun) {
     try {
-      filter = (kind ? tagFilter(kind.tag) : "") + nameFilter();
+      filter = searchFilters();
     } catch (e) {
       return show("error", e.message);
     }
@@ -2666,15 +2770,15 @@ async function startSearch(reuse) {
   if (!key) return show("error", `Enter a Google API key in step ${lastStep()}.`);
   if (minDist >= maxDist) return show("error", "The smallest distance has to be below the largest distance.");
   if (codes && !codes.length) return show("error", "Tick one or more countries in step 2.");
-  if (!ownRun && !kind && sc !== "pick")
+  if (!ownRun && !kinds.length && sc !== "pick")
     return show(
       "error",
       `A name search without a kind of place has to read everything on the map, which is too much for the whole world. Choose "Only the countries I choose" in step 2, or add a kind of place.`,
     );
-  if (!ownRun && kind && !words.length && sc !== "pick" && kind.count > TOO_MANY)
+  if (!ownRun && kinds.length && !words.length && sc !== "pick" && kindsCount() > TOO_MANY)
     return show(
       "error",
-      `There are about ${fmt(kind.count)} of these worldwide, too many to search at once. Choose "Only the countries I choose" in step 2.`,
+      `There are about ${fmt(kindsCount())} of these worldwide, too many to search at once. Choose "Only the countries I choose" in step 2.`,
     );
 
   for (const id of ["maxDist", "minDist", "target"]) store.set(id, $(id).value);
@@ -2730,7 +2834,7 @@ async function startSearch(reuse) {
         }));
       } catch (e) {
         if (e instanceof SearchError) {
-          const [title, text] = explainOsm(e, { sc, kind });
+          const [title, text] = explainOsm(e, { sc, kind: kinds.length > 0 });
           e.title = title;
           e.text = text;
           e.retry = true;
@@ -2769,9 +2873,13 @@ async function startSearch(reuse) {
         new Error(
           words.length
             ? "OpenStreetMap has no places with that name in the chosen area. Names are in the local language, so try other spellings."
-            : kind.count === 0 || kind.raw
-              ? "OpenStreetMap has no places with this tag in the chosen area. Check the spelling of the tag."
-              : "OpenStreetMap has no places of this kind in the chosen area.",
+            : kinds.some(k => k.count === 0 || k.raw)
+              ? kinds.length > 1
+                ? "OpenStreetMap has no places with these tags in the chosen area. Check the spelling of the tags."
+                : "OpenStreetMap has no places with this tag in the chosen area. Check the spelling of the tag."
+              : kinds.length > 1
+                ? "OpenStreetMap has no places of these kinds in the chosen area."
+                : "OpenStreetMap has no places of this kind in the chosen area.",
         ),
         { plain: true },
       );

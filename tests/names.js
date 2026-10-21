@@ -2,6 +2,7 @@
 // removing it and undoing that.
 const { chromium } = require("./pw.js");
 const { PAGE, isSite, serveSite } = require("./site.js");
+const { chooseKind } = require("./helpers.js");
 const H = { "access-control-allow-origin": "*" };
 const X = '<img src=x onerror="window.__xss=1">';
 const N = (id, lat, lon, name) => ({ type: "node", id, lat, lon, tags: name ? { name } : {} });
@@ -48,8 +49,7 @@ const els = [
   });
   await p.goto(PAGE);
   await p.fill("#apiKey", "KEY");
-  await p.fill("#kind", "Lighthouse");
-  await p.keyboard.press("Enter");
+  await chooseKind(p, "Lighthouse");
   ok(
     (await p.isDisabled("#namesOpen")) && (await p.isHidden("#names")),
     "list button disabled and list hidden at start",

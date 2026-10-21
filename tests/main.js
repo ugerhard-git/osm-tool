@@ -5,6 +5,7 @@ const { chromium } = require("./pw.js");
 const { SITE, PAGE, isSite, serveSite } = require("./site.js");
 const fs = require("fs"),
   path = require("path");
+const { chooseKind, clearKinds, kindLabels } = require("./helpers.js");
 const leafDir = path.join(path.dirname(require.resolve("leaflet/package.json")), "dist");
 const page_url = PAGE;
 const A = cc => ({ type: "area", id: 3600000000 + cc.charCodeAt(0), tags: { "ISO3166-1": cc, name: cc } });
@@ -498,16 +499,22 @@ const done = page =>
       "world + official only: place in Madagascar skipped before any Google lookup",
     );
     log.opt.extra = [];
-    // raw tag
+    // raw tag: typed, offered as "Use the tag you typed", and added by "Find locations" without Enter
+    await clearKinds(page);
     await page.fill("#kind", "amenity=pub|bar, name=*");
-    await page.waitForFunction(() => /amenity=pub\|bar/.test(document.getElementById("picked").textContent));
+    await page.waitForFunction(() =>
+      /Use the tag you typed/.test(document.getElementById("suggest").textContent),
+    );
     await page.click("#go");
     await done(page);
-    ok(log.overpass.at(-1).includes('node["amenity"~"^(pub|bar)$"]["name"];out body;'), "raw tag filter");
+    ok(
+      log.overpass.at(-1).includes('node["amenity"~"^(pub|bar)$"]["name"];out body;') &&
+        (await kindLabels(page)) === "amenity=pub|bar, name=*",
+      "raw tag filter; the typed tag became a chip when the search started",
+    );
     // name search
     await allCoverage(page);
-    await page.fill("#kind", "Lighthouse");
-    await page.keyboard.press("Enter");
+    await chooseKind(page, "Lighthouse");
     await page.fill("#nameHas", 'Liberty, liberté, St. "X"');
     ok(
       /name containing Liberty or liberté/.test(await page.textContent("#picked")) &&
@@ -529,7 +536,7 @@ const done = page =>
       /^Lighthouse: Liberty/.test(lj.name) && !JSON.stringify(lj.customCoordinates).includes("Liberty"),
       "search label names the map, but is not added as a tag: " + lj.name,
     );
-    await page.fill("#kind", "");
+    await clearKinds(page);
     await page.fill("#nameHas", "alpaka, alpaca");
     let n0 = log.overpass.length;
     await page.check("input[name=scope][value=world]");
@@ -577,6 +584,7 @@ const done = page =>
     );
     await page.check("input[name=scope][value=world]");
     // junk text
+    await clearKinds(page);
     await page.fill("#kind", "zzzzqq");
     await page.waitForTimeout(500);
     await page.click("#go");
@@ -585,6 +593,7 @@ const done = page =>
       "unpicked text: " + (await page.textContent("#message")),
     );
     // exact name without picking
+    await clearKinds(page);
     await page.fill("#kind", "windmill");
     await page.keyboard.press("Escape");
     await page.click("#go");
@@ -593,8 +602,7 @@ const done = page =>
     // too many
     log.opt.count = 900000;
     await page.check("input[name=scope][value=world]");
-    await page.fill("#kind", "Castle");
-    await page.keyboard.press("Enter");
+    await chooseKind(page, "Castle");
     await page.waitForFunction(() => /900,000/.test(document.getElementById("picked").textContent));
     const n = log.overpass.length;
     await page.click("#go");
@@ -612,13 +620,10 @@ const done = page =>
     await page.fill("#nameHas", "");
     await page.reload();
     await page.waitForLoadState("load");
-    await page
-      .waitForFunction(() => document.getElementById("kind").value !== "", null, { timeout: 5000 })
-      .catch(() => {});
+    await page.waitForFunction(() => kinds.length > 0, null, { timeout: 5000 }).catch(() => {});
     ok(
-      (await page.inputValue("#kind")) === "Castle" &&
-        (await page.isChecked("input[name=scope][value=world]")),
-      "restored: " + (await page.inputValue("#kind")),
+      (await kindLabels(page)) === "Castle" && (await page.isChecked("input[name=scope][value=world]")),
+      "restored: " + (await kindLabels(page)),
     );
     ok(log.errors.length === 0, "no page errors " + log.errors.join(" | "));
   }
@@ -637,27 +642,27 @@ const done = page =>
       sug.some(s => /Kirche/.test(s)),
       "German suggestions",
     );
-    await page.fill("#kind", "");
+    await clearKinds(page);
+    await page.click("#kind");
     await page.keyboard.type("Leuchtt", { delay: 20 });
     await page.keyboard.press("Enter");
-    ok((await page.inputValue("#kind")) === "Leuchtturm", "picked Leuchtturm");
+    ok((await kindLabels(page)) === "Leuchtturm", "picked Leuchtturm");
     await page.waitForFunction(() => /taginfo/.test(document.getElementById("picked").textContent));
     await page.selectOption("#lang", "fr");
-    ok(
-      (await page.inputValue("#kind")) === "Phare",
-      "switch to French renames: " + (await page.inputValue("#kind")),
-    );
-    await page.fill("#kind", "");
+    ok((await kindLabels(page)) === "Phare", "switch to French renames: " + (await kindLabels(page)));
+    await clearKinds(page);
+    await page.click("#kind");
     await page.keyboard.type("eglise", { delay: 20 });
     await page.waitForTimeout(100);
     ok(
       (await page.$$eval("#suggest li", ls => ls.map(l => l.textContent))).some(s => /Église/.test(s)),
       "accent-insensitive French",
     );
-    await page.fill("#kind", "");
+    await clearKinds(page);
+    await page.click("#kind");
     await page.keyboard.type("lighthouse", { delay: 20 });
     await page.keyboard.press("Enter");
-    ok((await page.inputValue("#kind")) === "Phare", "English word works in French mode");
+    ok((await kindLabels(page)) === "Phare", "English word works in French mode");
     await page.click("#go");
     await done(page);
     ok(
@@ -903,8 +908,7 @@ const done = page =>
         (await page.evaluate(() => document.fonts.check("16px Overpass"))),
       "embedded font available",
     );
-    await page.fill("#kind", "Lighthouse");
-    await page.keyboard.press("Enter");
+    await chooseKind(page, "Lighthouse");
     await allCoverage(page);
     await page.click("#go");
     await done(page);

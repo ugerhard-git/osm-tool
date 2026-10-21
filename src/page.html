@@ -62,14 +62,14 @@
         <button type="button" class="dialog-x" id="welcomeX" aria-label="Close">×</button>
         <h2 id="welcomeTitle">Welcome to Lookout</h2>
         <p>
-          Lookout builds a map of Street View locations that stand near one kind of place and face it: every
+          Lookout builds a map of Street View locations that stand near a kind of place and face it: every
           lighthouse, windmill or castle with Street View nearby, for example. You then import the result into
           map-making.app.
         </p>
         <ol>
           <li>
-            <b>Choose what to look at.</b> Type a kind of place and pick a suggestion. You can also give words
-            the name must contain.
+            <b>Choose what to look at.</b> Type a kind of place and pick a suggestion. To search for up to
+            three kinds at once, add another kind of place. You can also give words the name must contain.
           </li>
           <li><b>Choose where.</b> Tick one or two countries, or search the whole world.</li>
           <li><b>Set how close and how many,</b> then select "Find locations".</li>
@@ -160,8 +160,8 @@
       <form class="panel" id="form" autocomplete="off">
         <h1>Lookout</h1>
         <p class="lede">
-          Build a map of Street View spots that stand near one kind of place and face it. Import the result
-          into map-making.app.
+          Build a map of Street View spots that stand near a kind of place and face it. Import the result into
+          map-making.app.
         </p>
         <div class="toplinks">
           <button type="button" class="howbtn" id="howBtn">How it works</button>
@@ -176,7 +176,7 @@
             <div class="field">
               <label for="ownLabel">What are these places?</label>
               <input type="text" id="ownLabel" maxlength="80" placeholder="for example Castles" />
-              <p class="hint">Used for the map name and the kind-of-place tag.</p>
+              <p class="hint">Used for the map name.</p>
             </div>
             <button type="button" class="btn" id="ownRemove">
               Remove these places and search OpenStreetMap instead
@@ -189,7 +189,8 @@
               <label for="kind">Kind of place</label>
               <select id="lang" aria-label="Language for suggestions"></select>
             </div>
-            <div class="combo">
+            <div class="chips" id="kindChips" hidden></div>
+            <div class="combo" id="kindCombo">
               <input
                 type="text"
                 id="kind"
@@ -202,6 +203,10 @@
               />
               <ul class="suggest" id="suggest" role="listbox" hidden></ul>
             </div>
+            <button type="button" class="addkind" id="addKind" hidden>+ Add another kind of place</button>
+            <p class="hint" id="kindsFull" hidden>
+              That is the most: 3 kinds of place. Remove one to choose a different kind.
+            </p>
             <div class="picked" id="picked" hidden></div>
             <div class="field">
               <label for="nameHas">Name contains <span class="opt">optional</span></label>
@@ -237,6 +242,11 @@
                     <td>Both tags must be present. Separate with a comma.</td>
                   </tr>
                 </table>
+                <p>
+                  To find places of different kinds in one search, such as lighthouses and light beacons, pick
+                  one, then select "+ Add another kind of place". Up to three kinds can be combined; places of
+                  any of them are found.
+                </p>
                 <h3>Looking for one specific thing</h3>
                 <p>
                   Combine a kind of place with "Name contains". For replicas of the Statue of Liberty, choose

@@ -2,6 +2,7 @@
 // panoramas. No tag, and a note, when Google gives no answer or its script cannot be loaded.
 const { chromium } = require("./pw.js");
 const { PAGE, isSite, serveSite } = require("./site.js");
+const { chooseKind } = require("./helpers.js");
 const H = { "access-control-allow-origin": "*" };
 const N = (id, lat, lon, name) => ({ type: "node", id, lat, lon, tags: { name } });
 const els = [
@@ -48,8 +49,7 @@ async function run(b, name, { script, tick, check }) {
   });
   await p.goto(PAGE);
   await p.fill("#apiKey", "KEY");
-  await p.fill("#kind", "Lighthouse");
-  await p.keyboard.press("Enter");
+  await chooseKind(p, "Lighthouse");
   await p.check("input[name=scope][value=pick]");
   await p.check("#countries input[value=MT]");
   if (tick) await p.check("#tagRoad");
