@@ -4,6 +4,7 @@
 // again", an empty answer, Stop, the remembered query and tick, and the user's own server asked first.
 const { chromium } = require("./pw.js");
 const { PAGE, isSite, serveSite } = require("./site.js");
+const { chooseKind } = require("./helpers.js");
 const H = { "access-control-allow-origin": "*" };
 const MALTA = [
   { type: "node", id: 1, lat: 35.9, lon: 14.5, tags: { name: "Alpha Light" } },
@@ -107,8 +108,7 @@ const MALTA = [
     /Lookout has no query yet/.test(await p.textContent("#ownQueryError")),
     "no query from Lookout yet: explained",
   );
-  await p.fill("#kind", "Lighthouse");
-  await p.keyboard.press("Enter");
+  await chooseKind(p, "Lighthouse");
   await p.check("input[name=scope][value=pick]");
   await p.check("#countries input[value=MT]");
   await p.click("#ownQueryFromLookout");

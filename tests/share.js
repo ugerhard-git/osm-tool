@@ -2,6 +2,7 @@
 // same settings and nothing runs until they start it, and hostile or broken links are refused or clamped.
 const { chromium } = require("./pw.js");
 const { PAGE, isSite, serveSite } = require("./site.js");
+const { chooseKind } = require("./helpers.js");
 const H = { "access-control-allow-origin": "*" };
 const file = PAGE;
 (async () => {
@@ -33,8 +34,7 @@ const file = PAGE;
   await p.click("#share");
   ok(/Choose a kind of place or enter a name/.test(await p.textContent("#message")), "nothing to share yet");
   await p.fill("#apiKey", "SECRETKEY_SHOULD_NOT_LEAK");
-  await p.fill("#kind", "Castle");
-  await p.keyboard.press("Enter");
+  await chooseKind(p, "Castle");
   await p.fill("#nameHas", "neu, château & co");
   await p.check("input[name=scope][value=pick]");
   await p.check("#countries input[value=DE]");
@@ -56,8 +56,8 @@ const file = PAGE;
   const p2 = await mk(url);
   await p2.waitForTimeout(300);
   const st = await p2.evaluate(() => ({
-    kind: document.getElementById("kind").value,
-    tag: kind && kind.tag,
+    kind: kinds.map(k => k.label).join(),
+    tag: kinds.map(k => k.tag).join(),
     n: document.getElementById("nameHas").value,
     s: scope(),
     c: [...selected].sort().join(),
@@ -103,7 +103,7 @@ const file = PAGE;
   const h = await p3.evaluate(() => ({
     xss: window.__xss,
     imgs: document.querySelectorAll('img[src="x"]').length,
-    kind: kind && kind.tag,
+    kind: kinds.map(k => k.tag).join() || null,
     s: scope(),
     c: [...selected].join(),
     d: document.getElementById("maxDist").value,
@@ -127,7 +127,7 @@ const file = PAGE;
   ok(
     await p4.evaluate(
       () =>
-        kind.tag === "amenity=pub|bar" &&
+        kinds.map(k => k.tag).join() === "amenity=pub|bar" &&
         document.getElementById("maxDist").value === "2000" &&
         document.getElementById("target").value === "5" &&
         scope() === "pick",
@@ -141,9 +141,9 @@ const file = PAGE;
   ok(
     await p4.evaluate(
       () =>
-        kind.tag === "man_made=windmill" &&
+        kinds.map(k => k.tag).join() === "man_made=windmill" &&
         scope() === "world" &&
-        document.getElementById("kind").value === "Windmill",
+        kinds.map(k => k.label).join() === "Windmill",
     ),
     "pasting another link into the open page applies it",
   );

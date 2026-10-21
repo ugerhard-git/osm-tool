@@ -369,6 +369,17 @@ a:focus-visible {
 .combo {
   position: relative;
 }
+/* "+ Add another kind of place": a link-style button under the chosen kinds */
+.addkind {
+  font: inherit;
+  border: 0;
+  background: none;
+  color: var(--blue-dark);
+  text-decoration: underline;
+  cursor: pointer;
+  padding: 0;
+  margin: 0 0 4px;
+}
 .suggest {
   position: absolute;
   z-index: 1200;

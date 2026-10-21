@@ -22,7 +22,7 @@ Lint must be clean and all test files must pass. Add a test file or cases in `te
 
 ## Never break (details in CONTRIBUTING.md)
 
-- Saved settings (`lookout2.…`): keep the names; clear the saved value of a removed option.
-- Shared links people have already sent, including older `#` links, retired parameters and `s=cov` (now "Whole world"); the same for a saved `scope` of "cov".
+- Saved settings (`lookout2.…`): keep the names; clear the saved value of a removed option; move an old shape over on load (one `kind` → `kinds`).
+- Shared links people have already sent, including older `#` links, retired parameters, a single `k=` (now one `k=` per kind) and `s=cov` (now "Whole world"); the same for a saved `scope` of "cov".
 - The security policy: no inline event handlers, no new outside scripts, never loosened.
 - Keys: never in the repository, links or error messages.

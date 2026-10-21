@@ -12,7 +12,7 @@ const { PAGE, isSite, serveSite } = require("./site.js");
   const file = PAGE;
   const st = p =>
     p.evaluate(() => ({
-      kind: document.getElementById("kind").value,
+      kind: kinds.map(k => k.label).join(),
       scope: scope(),
       c: [...selected].sort().join(),
       d: document.getElementById("maxDist").value,

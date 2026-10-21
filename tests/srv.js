@@ -2,6 +2,7 @@
 // or forgetting it, and keeping its key out of links, the query panel and error messages.
 const { chromium } = require("./pw.js");
 const { PAGE, isSite, serveSite } = require("./site.js");
+const { chooseKind } = require("./helpers.js");
 const H = { "access-control-allow-origin": "*" };
 const KEY = "SECRETKEY123",
   BASE = `https://tile.tracestrack.com/overpass/${KEY}/`;
@@ -86,8 +87,7 @@ const els = [{ type: "area", id: 1, tags: { "ISO3166-1": "MT" } }, N(1, 35.9, 14
   };
   await p.goto(url);
   await p.fill("#apiKey", "KEY");
-  await p.fill("#kind", "Lighthouse");
-  await p.keyboard.press("Enter");
+  await chooseKind(p, "Lighthouse");
   await p.check("input[name=scope][value=pick]");
   await p.check("#countries input[value=MT]");
   ok((await p.textContent("#settingsBtn")) === "Settings", 'no own server: the button just says "Settings"');
@@ -319,8 +319,7 @@ const els = [{ type: "area", id: 1, tags: { "ISO3166-1": "MT" } }, N(1, 35.9, 14
   await settings();
   await p.check("input[name=srvMode][value=first]");
   await p.click("#settingsOk");
-  await p.fill("#kind", "Lighthouse");
-  await p.keyboard.press("Enter");
+  await chooseKind(p, "Lighthouse");
   await p.fill("#apiKey", "KEY");
   log = await run();
   ok(

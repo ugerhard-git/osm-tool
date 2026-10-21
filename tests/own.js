@@ -4,6 +4,7 @@ const { chromium } = require("./pw.js");
 const { PAGE, isSite, serveSite } = require("./site.js");
 const path = require("path");
 const fs = require("fs");
+const { chooseKind } = require("./helpers.js");
 const H = { "access-control-allow-origin": "*" };
 const X = '"><img src=x onerror="window.__xss=1">';
 const grouped = {
@@ -264,8 +265,7 @@ fs.writeFileSync(path.join(__dirname, "../dist/loose-export.json"), JSON.stringi
       !(await p.isDisabled("#tagCountry")),
     "remove returns to the normal search",
   );
-  await p.fill("#kind", "Lighthouse");
-  await p.keyboard.press("Enter");
+  await chooseKind(p, "Lighthouse");
   await p.click("#go");
   await p.waitForFunction(() => !running && !/Ready/.test(document.getElementById("now").textContent));
   ok(osm.length > 0, "normal search asks OpenStreetMap again");

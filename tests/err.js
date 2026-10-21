@@ -2,6 +2,7 @@
 // no connection, rejected query, unreadable answer, …), the error card says what happened in plain words.
 const { chromium } = require("./pw.js");
 const { PAGE, isSite, serveSite } = require("./site.js");
+const { chooseKind } = require("./helpers.js");
 const H = { "access-control-allow-origin": "*" };
 const cases = {
   timeout: r =>
@@ -101,8 +102,7 @@ const cases = {
       for (const c of COVERAGE) selected.add(c);
       renderCountries();
     });
-    await p.fill("#kind", "Lighthouse");
-    await p.keyboard.press("Enter");
+    await chooseKind(p, "Lighthouse");
     await p.click("#go");
     await p.waitForFunction(
       () => !running && !/Ready/.test(document.getElementById("now").textContent),

@@ -2,6 +2,7 @@
 // country that still fails is skipped and named, and the search waits when the servers ask it to slow down.
 const { chromium } = require("./pw.js");
 const { PAGE, isSite, serveSite } = require("./site.js");
+const { chooseKind } = require("./helpers.js");
 const H = { "access-control-allow-origin": "*" };
 const codesOf = q => /\^\(([A-Z|]+)\)\$/.exec(q)[1].split("|");
 const answer = codes => ({
@@ -90,8 +91,7 @@ const scenarios = {
       for (const c of COVERAGE) selected.add(c);
       renderCountries();
     });
-    await p.fill("#kind", "Lighthouse");
-    await p.keyboard.press("Enter");
+    await chooseKind(p, "Lighthouse");
     await p.click("#go");
     if (name === "rate") {
       await p.waitForFunction(() => /slow down/.test(document.getElementById("liveSub").textContent), null, {
