@@ -38,8 +38,9 @@
  *   kinds (formerly one "kind", moved over on load), nameHas, lang, countries, scope, maxDist, minDist,
  *   target, official, tagCountry, tagRoad,
  *   expert (whether that panel is open), expertPart (its section used last), ownQuery (the text of
- *   your own query), ownQueryAuto (check Street View right after your own query) and welcomed
- *   (first-visit dialog seen).
+ *   your own query), ownQueryAuto (check Street View right after your own query), welcomed
+ *   (first-visit dialog seen), history (the last 20 searches, see "history of searches"; never a key
+ *   or the own server) and historyOn (whether that history is kept).
  *   The own server is "lookout2.osmOwn" in localStorage or, if not remembered, sessionStorage.
  *   A visitor's own Google key is only kept in sessionStorage ("lookout2.key"), never on disk.
  *   Saved values and shared links can be edited by anyone, so everything read back is checked first.
@@ -1163,7 +1164,7 @@ $("srvRemember").onchange = srvResave;
 }
 
 /* ---------- your own Overpass result: state ---------- */
-let ownResult = null; // { places, noPosition, lines, worked, hasCc, countries, source }
+let ownResult = null; // { places, noPosition, lines, worked, hasCc, countries, source, query? (text of your own query) }
 /* The country tag needs a country per place. Every search finds one (from OpenStreetMap, or from the
    position); only an own result where no place could be placed in a country has none. */
 function updateCountryTag() {
@@ -1364,13 +1365,16 @@ function explainOwnQuery(e) {
   }
 }
 let retryAction = () => startSearch(null); // what "Try again" on the error card does
-async function runOwnQuery() {
+/* Runs the query in "Run your own query". checkStreetView: go on to Street View afterwards, as with
+   "Also check Street View" ticked (used by "Run again" in the history). */
+async function runOwnQuery(checkStreetView = false) {
   const err = $("ownQueryError");
   err.hidden = true;
   if (running) return;
+  const typed = $("ownQuery").value.trim(); // kept with the places, for the history
   let prepared;
   try {
-    prepared = prepareOwnQuery($("ownQuery").value);
+    prepared = prepareOwnQuery(typed);
   } catch (e) {
     err.textContent = e.message;
     err.hidden = false;
@@ -1393,7 +1397,7 @@ async function runOwnQuery() {
     if (e.name === "AbortError") return paint("Stopped.");
     if (!(e instanceof SearchError)) throw e;
     const [title, text] = explainOwnQuery(e);
-    retryAction = runOwnQuery;
+    retryAction = () => runOwnQuery(checkStreetView);
     fail(title, text, e.detail, true);
     return paint(`Stopped. ${title}.`);
   }
@@ -1408,6 +1412,7 @@ async function runOwnQuery() {
       ),
       "your query",
     );
+    ownResult.query = typed;
     paint("Your places are loaded.");
   } catch (e) {
     err.textContent = e.message;
@@ -1417,11 +1422,11 @@ async function runOwnQuery() {
   }
   // "Also check Street View": the same as selecting "Find locations" now, with the current
   // settings for distance, number of locations and tags.
-  if ($("ownQueryAuto").checked) startSearch(null);
+  if (checkStreetView || $("ownQueryAuto").checked) startSearch(null);
 }
 $("ownQuery").value = cleanText(store.get("ownQuery", ""), OWN_QUERY_MAX);
 $("ownQuery").oninput = () => store.set("ownQuery", $("ownQuery").value.slice(0, OWN_QUERY_MAX));
-$("ownQueryRun").onclick = runOwnQuery;
+$("ownQueryRun").onclick = () => runOwnQuery();
 $("ownQueryAuto").checked = store.get("ownQueryAuto", false) === true;
 $("ownQueryAuto").onchange = () => store.set("ownQueryAuto", $("ownQueryAuto").checked);
 $("ownQueryFromLookout").onclick = () => {
@@ -1441,8 +1446,8 @@ $("ownQueryFromLookout").onclick = () => {
    links) still work, but some web hosts check new visitors with a redirect that loses everything after "#",
    while the query part survives it. The API key is never included. Everything read from a link is checked
    before use, and unknown parameters (such as a host's own "i=1") are ignored. */
-/* The address of this search, with its settings. */
-function shareLink() {
+/* The settings of this search, as in a shared link (and a history entry). */
+function searchParams() {
   const q = new URLSearchParams(),
     s = scope();
   for (const k of kinds) q.append("k", k.tag); // one k= per kind
@@ -1458,8 +1463,10 @@ function shareLink() {
   if ($("tagRoad").checked) q.set("gr", "1");
   const mn = $("mapName").value.trim();
   if (mn) q.set("name", mn);
-  return location.href.split(/[?#]/)[0] + "?" + q.toString();
+  return q;
 }
+/* The address of the page with settings: those of this search, or the given ones. */
+const shareLink = (q = searchParams()) => location.href.split(/[?#]/)[0] + "?" + q.toString();
 /* A link counts as a shared search if it has at least one of these. */
 const LINK_KEYS = ["k", "n", "s", "c", "d", "t"];
 /* The settings in this page's address, or null when it carries none. */
@@ -1476,26 +1483,34 @@ function linkParams() {
   }
   return null;
 }
-/* Puts the settings from the address into the form. Numbers are kept within the field limits, unknown
-   countries and broken tags are dropped. Returns true if the address carried a search. */
+/* Puts the settings from the address into the form. Returns true if the address carried a search. */
 function applyLink() {
   const q = linkParams();
   if (!q) return false;
+  applyParams(q);
+  return true;
+}
+/* Puts settings (a shared link's, or a history entry's) into the form. Numbers are kept within the field
+   limits, unknown countries and broken tags are dropped. onlyStep3: leave steps 1 and 2 alone (for a
+   search with your own query, whose places do not come from them). */
+function applyParams(q, onlyStep3 = false) {
   const num = (key, lo, hi, id) => {
     const v = Math.round(Number(q.get(key)));
     if (q.has(key) && Number.isFinite(v)) $(id).value = Math.min(hi, Math.max(lo, v));
   };
-  // One k= per kind (older links have just one). Broken tags are dropped, and at most MAX_KINDS kept.
-  kinds = cleanKinds(q.getAll("k").slice(0, 10));
-  kindEl.value = "";
-  addingKind = false;
-  renderKinds();
-  $("nameHas").value = cleanText(q.get("n"), 200);
-  const s = scopeValue(q.get("s"));
-  if (s) document.querySelector(`input[name=scope][value=${s}]`).checked = true;
-  if (q.has("c")) {
-    selected.clear();
-    for (const c of cleanText(q.get("c"), 1200).split(/[-,]/)) if (CODES.includes(c)) selected.add(c);
+  if (!onlyStep3) {
+    // One k= per kind (older links have just one). Broken tags are dropped, and at most MAX_KINDS kept.
+    kinds = cleanKinds(q.getAll("k").slice(0, 10));
+    kindEl.value = "";
+    addingKind = false;
+    renderKinds();
+    $("nameHas").value = cleanText(q.get("n"), 200);
+    const s = scopeValue(q.get("s"));
+    if (s) document.querySelector(`input[name=scope][value=${s}]`).checked = true;
+    if (q.has("c")) {
+      selected.clear();
+      for (const c of cleanText(q.get("c"), 1200).split(/[-,]/)) if (CODES.includes(c)) selected.add(c);
+    }
   }
   num("d", 5, 2000, "maxDist");
   num("m", 0, 1000, "minDist");
@@ -1505,7 +1520,6 @@ function applyLink() {
   $("tagCountry").checked = q.get("gc") !== "0";
   $("tagRoad").checked = q.get("gr") === "1";
   $("mapName").value = cleanText(q.get("name"), 100);
-  return true;
 }
 $("share").onclick = async () => {
   const b = $("share");
@@ -1568,6 +1582,212 @@ function linkNote() {
     'These settings come from a shared link. Select "Find locations" to run the search. Results are a random selection, so yours will differ from the sender\'s.',
   );
 }
+
+/* ---------- history of searches ----------
+   Every search started with "Find locations" is kept in this browser ("lookout2.history", newest first,
+   at most HISTORY_MAX), so it can be run again. An entry holds the settings as a shared link would
+   (searchParams), plus the query text for a search with your own query. Searches on an uploaded or
+   pasted Overpass result are not kept, as the file could be very large. Like a shared link, an entry
+   never holds the Google key or the own server's address. Results are not kept either. */
+const HISTORY_MAX = 20;
+/**
+ * @typedef {object} HistoryEntry
+ * @property {string} id
+ * @property {number} at          when the search started (milliseconds since 1970)
+ * @property {string} title       the map name
+ * @property {string} params      the settings, as in a shared link
+ * @property {string} [query]     the text of your own query, for a search with one
+ * @property {string} [label]     "What are these places?" for a search with your own query
+ * @property {string} [outcome]   "87 locations", "Stopped after 12 locations", or what went wrong
+ */
+const historyOn = () => store.get("historyOn", true) !== false;
+/* The saved history. Saved values can be edited by anyone, so entries that are not well-formed are
+   dropped. @returns {HistoryEntry[]} */
+function loadHistory() {
+  const raw = store.get("history", []);
+  if (!Array.isArray(raw)) return [];
+  const out = [];
+  for (const e of raw.slice(0, HISTORY_MAX)) {
+    if (!e || typeof e !== "object" || !inRange(e.at, 0, 1e14)) continue;
+    const params = cleanText(e.params, 3000),
+      query = cleanText(e.query, OWN_QUERY_MAX).trim();
+    let q;
+    try {
+      q = new URLSearchParams(params);
+    } catch {
+      continue;
+    }
+    if (!query && !LINK_KEYS.some(x => q.has(x))) continue;
+    out.push({
+      id: cleanText(e.id, 40) || String(e.at),
+      at: e.at,
+      title: cleanText(e.title, 200) || "Search",
+      params,
+      query: query || undefined,
+      label: cleanText(e.label, 80) || undefined,
+      outcome: cleanText(e.outcome, 200) || undefined,
+    });
+  }
+  return out;
+}
+const saveHistory = list => store.set("history", list.slice(0, HISTORY_MAX));
+/* Adds the search that is starting to the history. The same search again moves to the top instead of
+   being added twice. Returns the entry's id, or null when nothing is kept. */
+function recordSearch(title) {
+  if (!historyOn() || (ownResult && !ownResult.query)) return null; // uploaded or pasted: not kept
+  const q = searchParams();
+  // With your own query, steps 1 and 2 play no part; only the settings of the last step are kept.
+  if (ownResult) for (const k of ["k", "n", "s", "c"]) q.delete(k);
+  const params = q.toString(),
+    query = ownResult ? ownResult.query : undefined;
+  const list = loadHistory().filter(e => !(e.params === params && (e.query || "") === (query || "")));
+  const entry = {
+    id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+    at: Date.now(),
+    title,
+    params,
+    query,
+    label: ownResult ? $("ownLabel").value.trim().slice(0, 80) || undefined : undefined,
+  };
+  saveHistory([entry, ...list]);
+  return entry.id;
+}
+/* Notes how a search ended on its history entry. */
+function finishSearch(id, outcome) {
+  if (!id) return;
+  const list = loadHistory(),
+    e = list.find(x => x.id === id);
+  if (!e) return;
+  e.outcome = outcome;
+  saveHistory(list);
+  if (!$("history").hidden) renderHistory();
+}
+/* One line about an entry's settings: "Malta · 50 m · up to 1,000 · official only". */
+function historyDetails(e) {
+  const q = new URLSearchParams(e.params),
+    bits = [];
+  if (e.query) bits.push("Your own query");
+  else if (scopeValue(q.get("s")) === "world") bits.push("Whole world");
+  else {
+    const c = cleanText(q.get("c"), 1200)
+      .split(/[-,]/)
+      .filter(x => CODES.includes(x));
+    bits.push(c.length <= 2 ? c.map(countryName).join(" and ") || "No countries" : `${c.length} countries`);
+  }
+  const num = (key, lo, hi, d) => Math.min(hi, Math.max(lo, Math.round(Number(q.get(key))) || d));
+  bits.push(`${fmt(num("d", 5, 2000, 50))} m`, `up to ${fmt(num("t", 1, 100000, 1000))}`);
+  if (q.get("o") !== "0") bits.push("official only");
+  return bits.join(" · ");
+}
+/* "Today, 14:03", "12 Oct, 09:41", or with the year when it is not this year. */
+function historyWhen(at) {
+  const d = new Date(at),
+    now = new Date();
+  const time = d.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
+  if (d.toDateString() === now.toDateString()) return `Today, ${time}`;
+  const opts = { day: "numeric", month: "short" };
+  if (d.getFullYear() !== now.getFullYear()) opts.year = "numeric";
+  return `${d.toLocaleDateString("en-GB", opts)}, ${time}`;
+}
+/* Fills the History dialog. Everything from the saved history is put on the page as text. */
+function renderHistory() {
+  const list = $("historyList"),
+    entries = historyOn() ? loadHistory() : [];
+  list.textContent = "";
+  $("historyEmpty").hidden = entries.length > 0;
+  $("historyEmpty").textContent = historyOn()
+    ? 'No searches yet. Each search you start with "Find locations" appears here.'
+    : "The history is switched off. Switch it on under Settings.";
+  $("historyClear").hidden = !entries.length;
+  for (const e of entries) {
+    const run = makeElement("button", { type: "button", className: "btn primary" }, "Run again");
+    run.onclick = () => useHistory(e, true);
+    const use = makeElement("button", { type: "button", className: "btn" }, "Use these settings");
+    use.onclick = () => useHistory(e, false);
+    const acts = makeElement("div", { className: "hist-acts" }, run, use);
+    if (!e.query) {
+      const copy = makeElement("button", { type: "button", className: "linkbtn" }, "Copy link");
+      copy.onclick = async () => {
+        try {
+          await navigator.clipboard.writeText(shareLink(new URLSearchParams(e.params)));
+          copy.textContent = "Link copied";
+        } catch {
+          copy.textContent = "Could not copy";
+        }
+        setTimeout(() => (copy.textContent = "Copy link"), 2000);
+      };
+      acts.append(copy);
+    }
+    const remove = makeElement("button", { type: "button", className: "linkbtn rm" }, "Remove");
+    remove.setAttribute("aria-label", `Remove "${e.title}" from the history`);
+    remove.onclick = () => {
+      saveHistory(loadHistory().filter(x => x.id !== e.id));
+      renderHistory();
+    };
+    acts.append(remove);
+    list.append(
+      makeElement(
+        "li",
+        {},
+        makeElement("b", {}, e.title),
+        makeElement("span", { className: "hint" }, historyDetails(e)),
+        makeElement("span", { className: "hint" }, historyWhen(e.at) + (e.outcome ? " · " + e.outcome : "")),
+        acts,
+      ),
+    );
+  }
+}
+/* "Run again" (run = true) or "Use these settings" (run = false) on a history entry. */
+function useHistory(e, run) {
+  if (running) return;
+  closeDialog();
+  const q = new URLSearchParams(e.params);
+  if (e.query) {
+    // A search with your own query: its text goes back into "Run your own query".
+    applyParams(q, true);
+    $("ownQuery").value = e.query;
+    store.set("ownQuery", e.query);
+    if (e.label) $("ownLabel").value = e.label;
+    $("expert").open = true;
+    $("partQuery").open = true;
+    if (run) runOwnQuery(true);
+    else {
+      $("partQuery").scrollIntoView({ block: "start" });
+      show(
+        "note",
+        'The query from your history is in "Run your own query". Select "Run this query" to run it.',
+      );
+    }
+    return;
+  }
+  if (ownResult) {
+    ownResult = null;
+    renderOwn();
+  }
+  applyParams(q);
+  renderCountries();
+  renderPicked();
+  if (run) startSearch(null);
+  else
+    show(
+      "note",
+      'These settings come from your history. Check them, then select "Find locations". Results are a new random selection.',
+    );
+}
+$("historyBtn").onclick = () => {
+  renderHistory();
+  openDialog("history");
+};
+$("historyX").onclick = closeDialog;
+$("historyClear").onclick = () => {
+  saveHistory([]);
+  renderHistory();
+};
+$("historyOn").checked = historyOn();
+$("historyOn").onchange = () => {
+  store.set("historyOn", $("historyOn").checked);
+  if (!$("historyOn").checked) saveHistory([]); // switching it off also clears it
+};
 
 renderCountries();
 renderPicked();
@@ -2788,6 +3008,9 @@ async function startSearch(reuse) {
   if (!GOOGLE_API_KEY) keyStore.set(key);
 
   lastName = $("mapName").value.trim() || (ownRun ? ownRun.name : $("mapName").placeholder);
+  // Kept in the history (not a re-check of earlier places, which is a variation of that search).
+  const historyId = reuse ? null : recordSearch(lastName);
+  let failTitle = "";
   results = [];
   removed = [];
   searchStats = emptyStats();
@@ -3091,6 +3314,7 @@ async function startSearch(reuse) {
       }
       if (!results.length) searchStats.progress = 0;
       retryAction = () => startSearch(null);
+      failTitle = title;
       fail(title, text, detail, !!e.retry);
       paint(
         results.length
@@ -3098,6 +3322,22 @@ async function startSearch(reuse) {
           : `Stopped. ${title}.`,
       );
     }
+  }
+  {
+    const n = results.length,
+      found = `${fmt(n)} ${n === 1 ? "location" : "locations"}`;
+    finishSearch(
+      historyId,
+      failTitle
+        ? n
+          ? `${failTitle}, after ${found}`
+          : failTitle
+        : signal.aborted
+          ? n
+            ? `Stopped after ${found}`
+            : "Stopped"
+          : found,
+    );
   }
   setPhase(0);
   paint();

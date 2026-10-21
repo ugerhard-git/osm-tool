@@ -100,7 +100,7 @@ fieldset:disabled {
   font-size: 1.1rem;
 }
 
-/* ---------- "How it works", "Settings" and the dialogs (first-visit welcome, settings) ---------- */
+/* ---------- "How it works", "Settings", "History" and the dialogs (first-visit welcome, settings, history) ---------- */
 .howbtn {
   font: inherit;
   border: 0;
@@ -198,7 +198,52 @@ fieldset:disabled {
 .dialog-box > .btn.primary {
   margin-top: 14px;
 }
-/* "How it works" and "Settings", on their own line under the introduction */
+/* A button that looks like a link ("Copy link", "Remove", "Clear history") */
+.linkbtn {
+  font: inherit;
+  border: 0;
+  background: none;
+  color: var(--blue-dark);
+  text-decoration: underline;
+  cursor: pointer;
+  padding: 0;
+}
+.linkbtn.rm {
+  color: var(--red);
+}
+/* The list in the History dialog */
+.history-list {
+  list-style: none;
+  margin: 8px 0 12px;
+  padding: 0;
+}
+.history-list li {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 12px 0;
+  border-top: 1px solid var(--line);
+}
+.history-list li:last-child {
+  border-bottom: 1px solid var(--line);
+}
+.history-list .hint {
+  margin: 0;
+}
+.hist-acts {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 14px;
+  margin-top: 6px;
+}
+.hist-acts .btn {
+  padding: 6px 12px;
+}
+.hist-acts .rm {
+  margin-left: auto;
+}
+/* "How it works", "Settings" and "History", on their own line under the introduction */
 .toplinks {
   display: flex;
   flex-wrap: wrap;

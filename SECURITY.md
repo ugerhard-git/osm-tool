@@ -12,3 +12,4 @@ Please do not report security problems in public issues. Use GitHub's private re
 - No libraries are loaded from CDNs at runtime; they are embedded by the build (Leaflet, country-coder), pinned to exact versions and covered by the script fingerprints.
 - API keys are never committed. The site's Google key is added at publish time from a GitHub secret. It is visible in the published page, as for any browser app, so it must be restricted in the Google Cloud console to the site's address, to the Street View Static API and Maps JavaScript API, with a daily quota.
 - A visitor's own Google key is kept only for the browser tab. A visitor's own Overpass server address (which contains their key) is kept in that browser only, never put in shared links or error messages.
+- The history of searches is kept in the visitor's browser only. It holds the same settings as a shared link, never a key or the own server's address, and is checked when read back.
