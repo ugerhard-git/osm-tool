@@ -93,7 +93,7 @@
         <button type="button" class="btn primary" id="welcomeOk">Start</button>
       </div>
     </div>
-    <!-- Settings dialog, opened by "Settings" next to "How it works" (app.js: settings, your own Overpass server) -->
+    <!-- Settings dialog, opened by "Settings" next to "How it works" (app.js: dialogs, your own Overpass server, history of searches) -->
     <div class="dialog" id="settings" hidden>
       <div
         class="dialog-box"
@@ -152,7 +152,36 @@
           The address contains your key. It stays in this browser, is sent only to that server, and is never
           put into a shared link.
         </p>
+        <h3>History</h3>
+        <label class="check"
+          ><input type="checkbox" id="historyOn" checked /><span
+            >Keep a history of my searches<br /><span class="hint"
+              >Kept in this browser only, up to 20 searches. Switching it off also clears it.</span
+            ></span
+          ></label
+        >
         <button type="button" class="btn primary" id="settingsOk">Done</button>
+      </div>
+    </div>
+    <!-- History dialog, opened by "History" next to "Settings" (app.js: history of searches) -->
+    <div class="dialog" id="history" hidden>
+      <div
+        class="dialog-box"
+        id="historyBox"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="historyTitle"
+        tabindex="-1"
+      >
+        <button type="button" class="dialog-x" id="historyX" aria-label="Close">×</button>
+        <h2 id="historyTitle">History</h2>
+        <p class="hint">
+          Your last searches, kept in this browser only. Only the settings are kept, not the results: running
+          a search again gives a new random selection.
+        </p>
+        <p id="historyEmpty" hidden></p>
+        <ul class="history-list" id="historyList"></ul>
+        <button type="button" class="linkbtn" id="historyClear" hidden>Clear history</button>
       </div>
     </div>
     <!-- The app: settings panel on the left, map on the right (stacked on phones) -->
@@ -166,6 +195,7 @@
         <div class="toplinks">
           <button type="button" class="howbtn" id="howBtn">How it works</button>
           <button type="button" class="howbtn" id="settingsBtn">Settings</button>
+          <button type="button" class="howbtn" id="historyBtn">History</button>
         </div>
 
         <fieldset id="fields">
