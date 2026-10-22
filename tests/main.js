@@ -237,7 +237,7 @@ const done = page =>
       "picked card: " + (await page.textContent("#picked")),
     );
     ok(
-      (await page.getAttribute("#mapName", "placeholder")) === "Lighthouse (119 countries)",
+      (await page.getAttribute("#mapName", "placeholder")) === "Lighthouse (120 countries)",
       "name placeholder: " + (await page.getAttribute("#mapName", "placeholder")),
     );
     // run with coverage default
@@ -270,9 +270,9 @@ const done = page =>
     ok(
       log.overpass.length >= 10 &&
         log.overpass.every(q => shape.test(q)) &&
-        partCodes.flat().length === 119 &&
-        new Set(partCodes.flat()).size === 119,
-      "search sent in parts covering all 119 countries exactly once",
+        partCodes.flat().length === 120 &&
+        new Set(partCodes.flat()).size === 120,
+      "search sent in parts covering all 120 countries exactly once",
     );
     ok(
       partCodes.filter(c => ["US", "RU", "CA", "BR", "AU"].some(x => c.includes(x))).length === 5,
@@ -414,8 +414,8 @@ const done = page =>
     ok(
       /timeout:180/.test(qt) &&
         /foreach\.all->\.c\(/.test(qt) &&
-        /\^\(([A-Z|]+)\)\$/.exec(qt)[1].split("|").length === 119,
-      "expert query is the combined 119-country query",
+        /\^\(([A-Z|]+)\)\$/.exec(qt)[1].split("|").length === 120,
+      "expert query is the combined 120-country query",
     );
     const href = await page.getAttribute("#turbo", "href");
     ok(
@@ -518,7 +518,7 @@ const done = page =>
     await page.fill("#nameHas", 'Liberty, liberté, St. "X"');
     ok(
       /name containing Liberty or liberté/.test(await page.textContent("#picked")) &&
-        (await page.getAttribute("#mapName", "placeholder")) === "Lighthouse: Liberty (119 countries)",
+        (await page.getAttribute("#mapName", "placeholder")) === "Lighthouse: Liberty (120 countries)",
       "name card: " + (await page.textContent("#picked")),
     );
     await page.evaluate(() => document.querySelector(".panel").scrollTo(0, 150));
@@ -674,7 +674,7 @@ const done = page =>
     console.log("FALLBACK", JSON.stringify(j).slice(0, 400));
     ok(
       j.customCoordinates.length === 3 &&
-        j.name === "Phare (119 countries)" &&
+        j.name === "Phare (120 countries)" &&
         j.customCoordinates.every(c => !(c.extra?.tags || []).includes("Phare")),
       "fallback results " + j.name,
     );
@@ -898,7 +898,7 @@ const done = page =>
     await page.goto(SITE + "edited.html");
     await page.waitForLoadState("load");
     ok(
-      (await page.isHidden("#keyBox")) && (await page.evaluate(() => COVERAGE.size)) === 121,
+      (await page.isHidden("#keyBox")) && (await page.evaluate(() => COVERAGE.size)) === 122,
       "settings block: key hides the field, country list edited safely: " +
         (await page.evaluate(() => COVERAGE.size)),
     );

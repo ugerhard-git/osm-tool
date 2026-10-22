@@ -128,8 +128,8 @@ const scenarios = {
     console.log(`[${name}] ${qs.length} requests; ${o.now}\n  note: ${o.note}\n  tally: ${o.tally}`);
     if (name === "split") {
       ok(
-        o.places === 118 &&
-          o.n === 118 &&
+        o.places === 119 &&
+          o.n === 119 &&
           o.skipped === 1 &&
           !o.cc.split(" ").includes("US") &&
           o.cc.split(" ").includes("DE"),
@@ -148,7 +148,7 @@ const scenarios = {
       await p.screenshot({ path: require("path").join(__dirname, "../dist/screens/k2.png") });
     }
     if (name === "rate")
-      ok(o.n === 119 && !o.fail, "search completes after waiting for the rate limit: " + o.n);
+      ok(o.n === 120 && !o.fail, "search completes after waiting for the rate limit: " + o.n);
     if (name === "stop") {
       const n = qs.length;
       await p.waitForTimeout(1500);
