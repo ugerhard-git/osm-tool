@@ -1,5 +1,6 @@
 # Proposes updates for the packages and the GitHub Actions used here, once a month.
-# Security fixes are proposed at once, whatever the settings below say.
+# Security fixes are proposed at once, whatever the settings below say, as long as "Dependabot security
+# updates" is turned on in the repository's security settings.
 version: 2
 updates:
   - package-ecosystem: npm

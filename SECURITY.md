@@ -8,8 +8,9 @@ Please do not report security problems in public issues. Use GitHub's private re
 
 - Everything the page receives from outside (OpenStreetMap servers, taginfo, Google, uploaded files, shared links) is checked before use and shown as text, never as HTML.
 - A Content Security Policy only lets the page's own scripts run, plus Google's Street View script. The build fingerprints the page's scripts, so changed or injected scripts are refused.
-- The page refuses to run inside another site's frame.
+- Inside another site's frame, the page shows only a link to open it on its own, so it cannot be overlaid to trick clicks.
 - No libraries are loaded from CDNs at runtime; they are embedded by the build (Leaflet, country-coder), pinned to exact versions and covered by the script fingerprints.
 - API keys are never committed. The site's Google key is added at publish time from a GitHub secret. It is visible in the published page, as for any browser app, so it must be restricted in the Google Cloud console to the site's address, to the Street View Static API and Maps JavaScript API, with a daily quota.
 - A visitor's own Google key is kept only for the browser tab. A visitor's own Overpass server address (which contains their key) is kept in that browser only, never put in shared links or error messages.
+- The number fields (distances, locations wanted) are kept within their limits, also for values typed past them or edited in saved settings, so one search cannot use up the site key's daily quota.
 - The history of searches is kept in the visitor's browser only. It holds the same settings as a shared link, never a key or the own server's address, and is checked when read back.

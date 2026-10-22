@@ -275,6 +275,18 @@ const esc = s =>
 const cleanText = (v, max = 200) => (typeof v === "string" ? v.slice(0, max) : "");
 /* True for a real number between lo and hi. */
 const inRange = (n, lo, hi) => typeof n === "number" && Number.isFinite(n) && n >= lo && n <= hi;
+/* The whole number in a number field, kept within the field's own min and max, or fallback when it is empty
+   or not a number. Only "Find locations" gets the browser's own check of the limits ("Run again" in the
+   history and your own query do not), and saved values can be edited, so they are enforced here: without
+   a top limit, one search could use up the site key's daily Google quota. The field then shows the number used. */
+function fieldNumber(id, fallback) {
+  const el = $(id),
+    v = Math.round(Number(el.value));
+  const n =
+    el.value.trim() === "" || !Number.isFinite(v) ? fallback : Math.min(+el.max, Math.max(+el.min, v));
+  el.value = n;
+  return n;
+}
 /* Lower case without accents, for matching: "Château" -> "chateau". */
 const foldAccents = s => s.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
 
@@ -960,9 +972,16 @@ $("targetInfoBtn").onclick = () => {
 };
 
 // Restore saved settings. Every value is checked before use.
-for (const id of ["maxDist", "minDist", "target"]) {
+for (const [id, fallback] of [
+  ["maxDist", 50],
+  ["minDist", 0],
+  ["target", 1000],
+]) {
   const v = store.get(id, null);
-  if (v !== null) $(id).value = v;
+  if (v !== null) {
+    $(id).value = String(v);
+    fieldNumber(id, fallback);
+  }
 }
 $("official").checked = store.get("official", true);
 $("tagCountry").checked = store.get("tagCountry", true);
@@ -2967,9 +2986,9 @@ async function startSearch(reuse) {
       return show("error", "Choose a kind of place or enter a name in step 1.");
   }
   const key = GOOGLE_API_KEY || $("apiKey").value.trim();
-  const maxDist = Math.max(5, +$("maxDist").value || 50);
-  const minDist = Math.max(0, +$("minDist").value || 0);
-  const target = Math.max(1, Math.floor(+$("target").value || 1000));
+  const maxDist = fieldNumber("maxDist", 50);
+  const minDist = fieldNumber("minDist", 0);
+  const target = fieldNumber("target", 1000);
   const official = $("official").checked,
     addCountry = $("tagCountry").checked,
     addRoad = $("tagRoad").checked;
