@@ -4,7 +4,7 @@ const { chromium } = require("./pw.js");
 const { SITE, PAGE, isSite, serveSite } = require("./site.js");
 const path = require("path");
 const fs = require("fs");
-const { clearKinds } = require("./helpers.js");
+const { chooseKind, clearKinds } = require("./helpers.js");
 const page = path.resolve(__dirname, "../dist/index.nokey.html");
 (async () => {
   const b = await chromium.launch();
@@ -157,6 +157,36 @@ const page = path.resolve(__dirname, "../dist/index.nokey.html");
   await p.fill("#kind", "light");
   await p.waitForTimeout(200);
   ok((await p.$$("#suggest li")).length > 0, "suggestions still work after a bad stored language");
+
+  // number fields: tampered saved values and values typed past the limits are brought back within them,
+  // so one search cannot ask Google for more than the most the field allows
+  await p.evaluate(() => {
+    localStorage.setItem("lookout2.target", JSON.stringify("99999999"));
+    localStorage.setItem("lookout2.maxDist", JSON.stringify("abc"));
+    localStorage.setItem("lookout2.minDist", JSON.stringify(-40));
+  });
+  await p.reload();
+  await p.waitForTimeout(300);
+  const fields = () =>
+    p.evaluate(() => ["target", "maxDist", "minDist"].map(id => document.getElementById(id).value).join());
+  ok(
+    (await fields()) === "100000,50,0",
+    "tampered saved numbers are kept within the field limits: " + (await fields()),
+  );
+  await p.fill("#target", "5000000");
+  await p.fill("#maxDist", "99999");
+  await chooseKind(p, "Lighthouse");
+  await p.fill("#apiKey", "KEY");
+  // "Find locations" is held back by the browser's own form check; "Run again" in the history and your own
+  // query start the search without it
+  await p.evaluate(() => startSearch(null));
+  await p.waitForTimeout(300);
+  ok(
+    (await fields()) === "100000,2000,0" &&
+      (await p.evaluate(() => localStorage.getItem("lookout2.target"))) === '"100000"',
+    "numbers typed past the limits are brought within them when the search starts: " + (await fields()),
+  );
+  await p.evaluate(() => abort?.abort());
   ok(errs.length === 0, "no page errors " + errs.join(" | "));
   fs.unlinkSync(outer);
   await b.close();

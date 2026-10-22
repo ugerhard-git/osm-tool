@@ -20,10 +20,12 @@
 
   googleApiKey         Your Google API key. Leave it empty in the repository: the build
                        fills it in from the GOOGLE_API_KEY environment variable.
-                       It needs the "Street View Static
-                       API" enabled. In the Google Cloud console, restrict it
-                       to this site's address and to that API, and set a daily
-                       quota. If left empty, visitors are asked for their own key.
+                       It needs the "Street View Static API" enabled, and the
+                       "Maps JavaScript API" for the official-only second look
+                       and the road-name tag. In the Google Cloud console,
+                       restrict it to this site's address and to those two
+                       APIs, and set a daily quota. If left empty, visitors
+                       are asked for their own key.
   streetViewCountries  Two-letter codes of the countries searched by default.
 
   Do not edit the script blocks further down: the page only runs scripts
