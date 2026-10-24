@@ -10,8 +10,9 @@
  * HOW A SEARCH RUNS (see startSearch)
  *   1. Step 1 sets `kinds` (up to three tags such as historic=castle; places of any of them are found)
  *      and/or words the name must contain.
- *      Step 2 sets where: chosen countries, or the whole world. Places whose answer names no country get
- *      one from their position (countryAt).
+ *      Step 2 sets where: chosen countries, regions of one chosen country (`regions`, listed from
+ *      OpenStreetMap by loadRegions), or the whole world. Places whose answer names no country get one
+ *      from their position (countryAt).
  *   2. buildQuery() writes the Overpass query. fetchPlaces() sends it in parts of a few countries
  *      (makeParts, halve) through overpass(), which tries the public servers and the user's own server.
  *      mergeElements() turns the answers into Place objects.
@@ -27,6 +28,7 @@
  * MAIN SHARED STATE
  *   kinds        the kinds of place from step 1, up to MAX_KINDS: [{ label, tag, raw?, count? }]
  *   selected     Set of the country codes ticked in step 2
+ *   regions      Set of the region codes ("DE-BY") chosen in step 2, only with exactly one country
  *   ownResult    the user's own Overpass result once loaded (see parseOwn), else null
  *   osmOwn       the user's own Overpass server: { url, mode: "first" | "fallback" }, or null
  *   results      the Locations found so far; `removed` holds the ones the user took out, for undo
@@ -35,7 +37,7 @@
  *   running      true while a search runs; abort.abort() stops it
  *
  * SAVED IN THE BROWSER (localStorage, each name starts with "lookout2.", see `store`)
- *   kinds (formerly one "kind", moved over on load), nameHas, lang, countries, scope, maxDist, minDist,
+ *   kinds (formerly one "kind", moved over on load), nameHas, lang, countries, regions, scope, maxDist, minDist,
  *   target, official, tagCountry, tagRoad,
  *   expert (whether that panel is open), expertPart (its section used last), ownQuery (the text of
  *   your own query), ownQueryAuto (check Street View right after your own query), welcomed
@@ -271,6 +273,12 @@ const esc = s =>
     /[&<>"'`]/g,
     c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;", "`": "&#96;" })[c],
   );
+/* A new element with properties and children: makeElement("a", { href }, "text"). */
+const makeElement = (tag, props = {}, ...kids) => {
+  const n = Object.assign(document.createElement(tag), props);
+  n.append(...kids);
+  return n;
+};
 /* A string from outside, cut to max characters; anything that is not a string becomes "". */
 const cleanText = (v, max = 200) => (typeof v === "string" ? v.slice(0, max) : "");
 /* True for a real number between lo and hi. */
@@ -671,12 +679,7 @@ function renderKinds() {
   const chips = $("kindChips");
   chips.textContent = "";
   for (const k of kinds) {
-    // (built directly: this runs while the page loads, before makeElement further down exists)
-    const b = document.createElement("button");
-    b.type = "button";
-    b.className = "chip";
-    b.textContent = k.label;
-    b.title = k.tag;
+    const b = makeElement("button", { type: "button", className: "chip", title: k.tag }, k.label);
     b.setAttribute("aria-label", `Remove ${k.label}`);
     b.onclick = () => removeKind(k.tag);
     chips.append(b);
@@ -819,6 +822,8 @@ $("lang").onchange = () => {
     renderKinds();
     renderPicked();
   }
+  renderRegions();
+  suggestName();
 };
 
 /* ---------- step 2: where ---------- */
@@ -828,6 +833,204 @@ const scope = () => document.querySelector("input[name=scope]:checked").value;
 /* "cov" (all Street View countries) was a third choice until it was replaced by "world", which now also
    finds each place's country. Saved settings and shared links that still say "cov" mean "world". */
 const scopeValue = s => (s === "cov" ? "world" : ["pick", "world"].includes(s) ? s : null);
+/* Regions (first-level subdivisions, such as German states) narrow a search to part of one country. They
+   are only offered when exactly one country is chosen. Their list comes from OpenStreetMap when someone
+   opens it: one small query per country, kept for the visit. A region is named by its ISO 3166-2 code
+   ("DE-BY"), as in OpenStreetMap, in links, saved settings and the history. */
+const REGION_CODE = /^[A-Z]{2}-[A-Z0-9]{1,3}$/;
+/** @type {Set<string>} chosen region codes, all of the one chosen country */
+const regions = new Set();
+let regionsOpen = false; // the region list is showing
+/** @type {Map<string, Promise<Region[]>>} the region list of each country, once asked for */
+const regionLists = new Map();
+/** @type {Map<string, Region[]>} the lists that have arrived, for names */
+const regionsLoaded = new Map();
+/**
+ * @typedef {object} Region
+ * @property {string} code  ISO 3166-2 code, "DE-BY"
+ * @property {Object<string, string>} names  name by language ("en", "de", …), and "" for the local name
+ */
+/* The one chosen country when regions can be offered, else "". */
+const regionCountry = () => (scope() === "pick" && selected.size === 1 ? [...selected][0] : "");
+/* Keeps only region codes of the given country, at most 100, in order. */
+const cleanRegions = (list, country) =>
+  [...new Set(list)]
+    .filter(c => typeof c === "string" && REGION_CODE.test(c) && c.startsWith(country + "-"))
+    .slice(0, 100);
+// Saved regions of the saved country.
+{
+  const saved = store.get("regions", []);
+  if (Array.isArray(saved) && selected.size === 1)
+    for (const r of cleanRegions(saved, [...selected][0])) regions.add(r);
+}
+/* A region's name in the chosen language, or its code while its country's list has not arrived. */
+function regionName(code) {
+  const r = (regionsLoaded.get(code.slice(0, 2)) || []).find(x => x.code === code);
+  return r ? r.names[lang] || r.names.en || r.names[""] || code : code;
+}
+/* A country's or a region's name, from its code. */
+const areaName = c => (c.includes("-") ? regionName(c) : countryName(c));
+/* Overpass query for the regions of a country: boundaries with an ISO 3166-2 code of that country. */
+const regionQuery = cc =>
+  `[out:json][timeout:25];rel["ISO3166-2"~"^${cc}-"]["boundary"="administrative"];out tags;`;
+/* Reads the answer to regionQuery: the regions of the first level, which is the highest level of boundary
+   (the lowest admin_level) with such codes, as some countries give codes to two levels (French regions and
+   départements). Sorted by name. Pure: no page access. @returns {Region[]} */
+function regionsFromAnswer(els, cc) {
+  const found = [];
+  for (const e of Array.isArray(els) ? els : []) {
+    const t = e && e.tags;
+    if (!t || typeof t !== "object") continue;
+    const code = cleanText(t["ISO3166-2"], 10),
+      level = Number(t.admin_level);
+    if (!REGION_CODE.test(code) || !code.startsWith(cc + "-") || !Number.isInteger(level) || level <= 2)
+      continue;
+    const names = { "": cleanText(t.name, 100) };
+    for (const l of Object.keys(LANGS)) if (t["name:" + l]) names[l] = cleanText(t["name:" + l], 100);
+    found.push({ code, level, names });
+  }
+  if (!found.length) return [];
+  const top = Math.min(...found.map(r => r.level)),
+    byCode = new Map();
+  for (const r of found)
+    if (r.level === top && !byCode.has(r.code)) byCode.set(r.code, { code: r.code, names: r.names });
+  const label = r => r.names.en || r.names[""] || r.code;
+  return [...byCode.values()].sort((a, b) => label(a).localeCompare(label(b)));
+}
+/* The regions of a country from OpenStreetMap, asked once per visit. A failed answer is not kept, so
+   "Try again" asks again. */
+function loadRegions(cc) {
+  if (!regionLists.has(cc)) {
+    const ask = overpass(regionQuery(cc), null, 0, 25).then(els => {
+      const list = regionsFromAnswer(els, cc);
+      regionsLoaded.set(cc, list);
+      return list;
+    });
+    ask.catch(() => regionLists.delete(cc));
+    regionLists.set(cc, ask);
+  }
+  return regionLists.get(cc);
+}
+/* Draws the "Only part of …" link, or the region chips and list, and saves the chosen regions. */
+function renderRegions() {
+  const cc = regionCountry();
+  if (!cc || ![...regions].every(r => r.startsWith(cc + "-"))) regions.clear();
+  if (!cc) regionsOpen = false;
+  if (regions.size) regionsOpen = true;
+  store.set("regions", [...regions]);
+  $("regionBox").hidden = !cc;
+  $("countryPick").hidden = regionsOpen;
+  $("regionOpen").hidden = regionsOpen;
+  $("regionPick").hidden = !regionsOpen;
+  if (!cc) return;
+  const country = countryName(cc);
+  $("regionOpen").textContent = `Only part of ${country}…`;
+  $("regionAll").textContent = `Search all of ${country}`;
+  $("regionSearch").placeholder = `Search regions of ${country}`;
+  $("regionSearch").setAttribute("aria-label", `Search regions of ${country}`);
+  const chips = $("regionChips");
+  chips.textContent = "";
+  for (const r of regions) {
+    const chip = makeElement("button", { type: "button", className: "chip" }, regionName(r));
+    chip.dataset.r = r;
+    chip.setAttribute("aria-label", `Remove ${regionName(r)}`);
+    chips.append(chip);
+  }
+  if (!regionsOpen) return;
+  const box = $("regionList");
+  const list = regionsLoaded.get(cc);
+  if (!list) {
+    box.replaceChildren(
+      makeElement("div", { className: "none" }, `Loading the regions of ${country} from OpenStreetMap…`),
+    );
+    // Asked once the page has finished starting: saved regions are drawn while it starts.
+    Promise.resolve()
+      .then(() => loadRegions(cc))
+      .then(
+        () => regionCountry() === cc && renderRegions(),
+        () => {
+          if (regionCountry() !== cc) return;
+          box.replaceChildren(
+            makeElement(
+              "div",
+              { className: "none" },
+              "The regions could not be loaded. The servers may be busy. ",
+              makeElement("button", { type: "button", className: "linkbtn", id: "regionRetry" }, "Try again"),
+            ),
+          );
+        },
+      );
+    return;
+  }
+  if (!list.length) {
+    box.replaceChildren(
+      makeElement(
+        "div",
+        { className: "none" },
+        `OpenStreetMap has no regions with ISO codes for ${country}, so it can only be searched as a whole.`,
+      ),
+    );
+    return;
+  }
+  const q = foldAccents($("regionSearch").value.trim());
+  const shown = list.filter(
+    r => !q || foldAccents(regionName(r.code)).includes(q) || r.code.toLowerCase() === q,
+  );
+  box.replaceChildren(
+    ...(shown.length
+      ? shown.map(r => {
+          const input = makeElement("input", {
+            type: "checkbox",
+            value: r.code,
+            checked: regions.has(r.code),
+          });
+          return makeElement("label", {}, input, regionName(r.code));
+        })
+      : [makeElement("div", { className: "none" }, "No region matches that search.")]),
+  );
+}
+$("regionOpen").onclick = () => {
+  regionsOpen = true;
+  $("regionSearch").value = "";
+  renderRegions();
+  suggestName();
+  $("regionSearch").focus();
+};
+$("regionAll").onclick = () => {
+  regions.clear();
+  regionsOpen = false;
+  renderRegions();
+  suggestName();
+  $("regionOpen").focus();
+};
+$("regionSearch").oninput = renderRegions;
+$("regionList").onchange = e => {
+  if (e.target.type !== "checkbox") return;
+  e.target.checked ? regions.add(e.target.value) : regions.delete(e.target.value);
+  renderRegions();
+  suggestName();
+};
+$("regionList").onclick = e => {
+  if (e.target.id === "regionRetry") renderRegions();
+};
+$("regionChips").onclick = e => {
+  const r = e.target.dataset.r;
+  if (r) {
+    regions.delete(r);
+    renderRegions();
+    suggestName();
+  }
+};
+/* The chosen regions in a few words: "Bavaria", or "2 regions of Germany". */
+const regionsLabel = () =>
+  regions.size === 1
+    ? regionName([...regions][0])
+    : `${regions.size} regions of ${countryName([...regions][0].slice(0, 2))}`;
+/* The areas a search covers: chosen regions, or chosen countries, or null for the whole world. */
+function searchCodes() {
+  if (scope() === "world") return null;
+  return regions.size ? [...regions] : [...selected];
+}
 /* Draws the country list and the chips of chosen countries, and saves the choice. */
 function renderCountries() {
   const q = $("countrySearch").value.trim().toLowerCase();
@@ -869,6 +1072,7 @@ function renderScope() {
   note.hidden = !text;
   if (text)
     note.innerHTML = `${esc(text)}<button type="button" id="allowUnofficial">Include photos from other people</button>`;
+  renderRegions();
   suggestName();
 }
 $("scopeNote").onclick = e => {
@@ -898,8 +1102,7 @@ function renderQuery() {
   let text,
     ok = false;
   try {
-    const s = scope(),
-      codes = s === "world" ? null : [...selected];
+    const codes = searchCodes();
     const filter = searchFilters();
     if (!filter.length) text = "Choose a kind of place or enter a name in step 1.";
     else if (codes && !codes.length) text = "Tick one or more countries in step 2.";
@@ -951,11 +1154,13 @@ function suggestName() {
   const where =
     s === "world"
       ? "World"
-      : selected.size === 0
-        ? ""
-        : selected.size <= 2
-          ? [...selected].map(countryName).join(" and ")
-          : selected.size + " countries";
+      : regions.size
+        ? regionsLabel()
+        : selected.size === 0
+          ? ""
+          : selected.size <= 2
+            ? [...selected].map(countryName).join(" and ")
+            : selected.size + " countries";
   if (ownResult) {
     $("mapName").placeholder = ownLabel();
     return;
@@ -1474,6 +1679,7 @@ function searchParams() {
   if (n) q.set("n", n);
   q.set("s", s);
   if (s === "pick" && selected.size) q.set("c", [...selected].join("-"));
+  if (s === "pick" && regions.size) q.set("r", [...regions].join(","));
   q.set("d", $("maxDist").value);
   if (+$("minDist").value > 0) q.set("m", $("minDist").value);
   q.set("t", $("target").value);
@@ -1530,6 +1736,11 @@ function applyParams(q, onlyStep3 = false) {
       selected.clear();
       for (const c of cleanText(q.get("c"), 1200).split(/[-,]/)) if (CODES.includes(c)) selected.add(c);
     }
+    // Regions of the one chosen country (r=DE-BY,DE-BW). A link without them searches whole countries.
+    regions.clear();
+    if (selected.size === 1)
+      for (const r of cleanRegions(cleanText(q.get("r"), 1200).split(","), [...selected][0])) regions.add(r);
+    regionsOpen = regions.size > 0;
   }
   num("d", 5, 2000, "maxDist");
   num("m", 0, 1000, "minDist");
@@ -1656,7 +1867,7 @@ function recordSearch(title) {
   if (!historyOn() || (ownResult && !ownResult.query)) return null; // uploaded or pasted: not kept
   const q = searchParams();
   // With your own query, steps 1 and 2 play no part; only the settings of the last step are kept.
-  if (ownResult) for (const k of ["k", "n", "s", "c"]) q.delete(k);
+  if (ownResult) for (const k of ["k", "n", "s", "c", "r"]) q.delete(k);
   const params = q.toString(),
     query = ownResult ? ownResult.query : undefined;
   const list = loadHistory().filter(e => !(e.params === params && (e.query || "") === (query || "")));
@@ -1691,7 +1902,11 @@ function historyDetails(e) {
     const c = cleanText(q.get("c"), 1200)
       .split(/[-,]/)
       .filter(x => CODES.includes(x));
-    bits.push(c.length <= 2 ? c.map(countryName).join(" and ") || "No countries" : `${c.length} countries`);
+    const r = c.length === 1 ? cleanRegions(cleanText(q.get("r"), 1200).split(","), c[0]) : [];
+    if (r.length)
+      bits.push(`${countryName(c[0])}: ${r.length === 1 ? regionName(r[0]) : `${r.length} regions`}`);
+    else
+      bits.push(c.length <= 2 ? c.map(countryName).join(" and ") || "No countries" : `${c.length} countries`);
   }
   const num = (key, lo, hi, d) => Math.min(hi, Math.max(lo, Math.round(Number(q.get(key))) || d));
   bits.push(`${fmt(num("d", 5, 2000, 50))} m`, `up to ${fmt(num("t", 1, 100000, 1000))}`);
@@ -1935,12 +2150,6 @@ function undoRemove() {
 const NAMES_MAX = 400; // rows drawn at once; the filter narrows the rest
 let namesOpenPano = "",
   namesSig = "";
-/* A new element with properties and children: makeElement("a", { href }, "text"). */
-const makeElement = (tag, props = {}, ...kids) => {
-  const n = Object.assign(document.createElement(tag), props);
-  n.append(...kids);
-  return n;
-};
 const makeLink = (href, label, cls = "") =>
   makeElement("a", { href, target: "_blank", rel: "noopener", className: cls }, label);
 function showOnMap(loc) {
@@ -2229,8 +2438,8 @@ function explainOsm(e, ctx) {
   }
 }
 /* The Overpass query. filters: one filter per kind of place (see searchFilters); places matching any
-   of them are found. codes: list of country codes, or null for the whole world.
-   grouped: results arrive per country, each group led by its country area. */
+   of them are found. codes: list of country codes, or region codes of one country ("DE-BY"), or null
+   for the whole world. grouped: results arrive per country (or region), each group led by its area. */
 function buildQuery(filters, codes, grouped = true, pretty = false, seconds = WORLD_TIMEOUT) {
   const nl = pretty ? "\n" : "",
     ind = pretty ? "  " : "";
@@ -2243,7 +2452,9 @@ function buildQuery(filters, codes, grouped = true, pretty = false, seconds = WO
     [nodes(set), "out body;", outlines(set), "out tags center;"].map(l => i + l).join(nl);
   const head = `[out:json][timeout:${seconds}];`;
   if (!codes) return head + nl + body("", "");
-  const areas = `area["ISO3166-1"~"^(${codes.join("|")})$"]->.all;`;
+  // Countries by their ISO 3166-1 code; regions ("DE-BY") by their ISO 3166-2 code.
+  const key = codes[0].includes("-") ? "ISO3166-2" : "ISO3166-1";
+  const areas = `area["${key}"~"^(${codes.join("|")})$"]->.all;`;
   if (!grouped) return head + nl + areas + nl + body("(area.all)", "");
   return (
     head +
@@ -2471,10 +2682,11 @@ const pause = (ms, signal) =>
     if (signal?.aborted) stop();
     else signal?.addEventListener("abort", stop);
   });
-/* Fetch the places. codes: list of country codes, or null for the whole world.
+/* Fetch the places. codes: list of country codes, or null for the whole world; or, with country set,
+   region codes of that country ("DE-BY"), each counting as a small country.
    Countries are requested a few at a time. A part that is too big for the server is split in two and
-   tried again; a single country that still fails is skipped. Returns { places, skipped }. */
-async function fetchPlaces(filter, codes, signal, onProgress = () => {}) {
+   tried again; a single country (or region) that still fails is skipped. Returns { places, skipped }. */
+async function fetchPlaces(filter, codes, signal, country = "", onProgress = () => {}) {
   const byId = new Map();
   if (!codes) {
     mergeElements(await overpass(buildQuery(filter, null), signal), byId);
@@ -2530,7 +2742,9 @@ async function fetchPlaces(filter, codes, signal, onProgress = () => {}) {
       els = await request(part);
     } catch (e) {
       if (!["timeout", "memory", "busy"].includes(e.kind)) throw e;
-      failures.push(`${part.length === 1 ? countryName(part[0]) : part.length + " countries"}: ${e.detail}`);
+      failures.push(
+        `${part.length === 1 ? areaName(part[0]) : part.length + (country ? " regions" : " countries")}: ${e.detail}`,
+      );
       // Nothing has worked and even the cheapest parts fail: this search is too heavy, stop instead of grinding on.
       if (!okParts && failures.length >= 3) throw new SearchError(e.kind, failures.join("\n"));
       if (part.length > 1) {
@@ -2542,7 +2756,8 @@ async function fetchPlaces(filter, codes, signal, onProgress = () => {}) {
       report();
       return;
     }
-    mergeElements(els, byId, part.length === 1 ? part[0] : undefined);
+    // The country of each place: the region's country, the part's one country, or found by mergeElements.
+    mergeElements(els, byId, country || (part.length === 1 ? part[0] : undefined));
     okParts++;
     done += weightOf(part);
     report();
@@ -2841,6 +3056,7 @@ const emptyStats = () => ({
   rescued: 0,
   road: { has: 0, none: 0, unknown: 0 },
   skipped: 0,
+  skippedRegions: false,
   noCoverage: 0,
   progress: 0,
 });
@@ -2909,7 +3125,7 @@ function paint(now) {
     );
   if (searchStats.skipped)
     t.push(
-      `<span><b>${fmt(searchStats.skipped)}</b> ${searchStats.skipped === 1 ? "country" : "countries"} left out</span>`,
+      `<span><b>${fmt(searchStats.skipped)}</b> ${searchStats.skippedRegions ? (searchStats.skipped === 1 ? "region" : "regions") : searchStats.skipped === 1 ? "country" : "countries"} left out</span>`,
     );
   if (removed.length)
     t.push(
@@ -2994,7 +3210,9 @@ async function startSearch(reuse) {
     addRoad = $("tagRoad").checked;
   const sc = scope(),
     label = ownRun ? ownRun.label : searchLabel();
-  const codes = ownRun || sc === "world" ? null : [...selected];
+  const codes = ownRun ? null : searchCodes();
+  // With regions chosen, codes are region codes ("DE-BY") of this one country.
+  const regionOf = codes && codes[0].includes("-") ? codes[0].slice(0, 2) : "";
   // A whole-world search, or a re-check of one: places in countries without official Street View are
   // skipped when only official coverage is wanted (see below).
   const wholeWorld = reuse ? !!reuse.world : !ownResult && sc === "world";
@@ -3041,9 +3259,13 @@ async function startSearch(reuse) {
   const signal = abort.signal;
   const whereText = !codes
     ? "the whole world"
-    : codes.length === 1
-      ? countryName(codes[0])
-      : `${codes.length} countries`;
+    : regionOf
+      ? codes.length === 1
+        ? `${regionName(codes[0])} (${countryName(regionOf)})`
+        : `${codes.length} regions of ${countryName(regionOf)}`
+      : codes.length === 1
+        ? countryName(codes[0])
+        : `${codes.length} countries`;
   if (!ownRun) {
     setPhase(1, `Looking up "${label}" on OpenStreetMap`, `Searching ${whereText}.`);
     paint("Asking OpenStreetMap for places…");
@@ -3062,7 +3284,7 @@ async function startSearch(reuse) {
       skipped = ownRun.skipped;
     } else
       try {
-        ({ places, skipped } = await fetchPlaces(filter, codes, signal, p => {
+        ({ places, skipped } = await fetchPlaces(filter, codes, signal, regionOf, p => {
           if (p.fraction > 0) {
             $("track").classList.remove("busy");
             $("track").classList.add("osm");
@@ -3086,6 +3308,7 @@ async function startSearch(reuse) {
     searchStats.places = places.length;
     searchStats.progress = 0;
     searchStats.skipped = skipped.length;
+    searchStats.skippedRegions = !!regionOf;
     if (!ownRun && osmOwn) {
       if (osmOwn.mode === "first" && osmUse.ownTrouble && osmUse.pub)
         notes.push(
@@ -3102,14 +3325,28 @@ async function startSearch(reuse) {
           ),
         );
     }
-    if (skipped.length)
+    if (skipped.length) {
+      const one = skipped.length === 1,
+        unit = regionOf
+          ? one
+            ? "One region was"
+            : skipped.length + " regions were"
+          : one
+            ? "One country was"
+            : skipped.length + " countries were";
       notes.push(
-        `${skipped.length === 1 ? "One country was" : skipped.length + " countries were"} left out because OpenStreetMap could not read ${skipped.length === 1 ? "it" : "them"} in time: ${skipped.map(countryName).join(", ")}. To include ${skipped.length === 1 ? "it" : "them"}, search ${skipped.length === 1 ? "it" : "them"} separately with "Only the countries I choose", ideally with a name filter.`,
+        `${unit} left out because OpenStreetMap could not read ${one ? "it" : "them"} in time: ${skipped.map(areaName).join(", ")}. To include ${one ? "it" : "them"}, search ${one ? "it" : "them"} separately${regionOf ? "" : ' with "Only the countries I choose"'}, ideally with a name filter.`,
       );
+    }
     if (!places.length && skipped.length)
-      throw Object.assign(new Error(`Nothing was found in the countries that could be read. ${notes[0]}`), {
-        plain: true,
-      });
+      throw Object.assign(
+        new Error(
+          `Nothing was found in the ${regionOf ? "regions" : "countries"} that could be read. ${notes[notes.length - 1]}`,
+        ),
+        {
+          plain: true,
+        },
+      );
     if (!places.length)
       throw Object.assign(
         new Error(
