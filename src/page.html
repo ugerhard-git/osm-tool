@@ -73,7 +73,10 @@
             <b>Choose what to look at.</b> Type a kind of place and pick a suggestion. To search for up to
             three kinds at once, add another kind of place. You can also give words the name must contain.
           </li>
-          <li><b>Choose where.</b> Tick one or two countries, or search the whole world.</li>
+          <li>
+            <b>Choose where.</b> Tick one or two countries, or search the whole world. With one country
+            ticked, "Only part of …" narrows the search to some of its regions, such as states or provinces.
+          </li>
           <li><b>Set how close and how many,</b> then select "Find locations".</li>
           <li>
             <b>Review and download.</b> Check the locations on the map or under "List by name", remove the
@@ -307,13 +310,26 @@
             >
             <div id="pickBox" hidden>
               <div class="chips" id="chips"></div>
-              <input
-                type="search"
-                id="countrySearch"
-                placeholder="Search countries"
-                aria-label="Search countries"
-              />
-              <div class="countries" id="countries"></div>
+              <!-- Regions of the one chosen country: a link at first, then their chips and list, which take
+                   the place of the country list (app.js: step 2, renderRegions) -->
+              <div class="regions" id="regionBox" hidden>
+                <button type="button" class="linkbtn" id="regionOpen"></button>
+                <div id="regionPick" hidden>
+                  <div class="chips" id="regionChips"></div>
+                  <input type="search" id="regionSearch" />
+                  <div class="countries" id="regionList"></div>
+                  <button type="button" class="linkbtn" id="regionAll"></button>
+                </div>
+              </div>
+              <div id="countryPick">
+                <input
+                  type="search"
+                  id="countrySearch"
+                  placeholder="Search countries"
+                  aria-label="Search countries"
+                />
+                <div class="countries" id="countries"></div>
+              </div>
             </div>
             <label class="radio"
               ><input type="radio" name="scope" value="world" /><span

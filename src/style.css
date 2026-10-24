@@ -554,6 +554,16 @@ a:focus-visible {
   margin-left: 6px;
   opacity: 0.7;
 }
+/* Regions of one country: the "Only part of …" link, then chips in the blue of a choice within the country */
+.regions {
+  margin: 0 0 8px;
+}
+#regionChips .chip {
+  background: var(--blue);
+}
+#regionPick .countries {
+  margin-bottom: 8px;
+}
 .countries {
   border: 1.5px solid var(--line);
   border-radius: 8px;
