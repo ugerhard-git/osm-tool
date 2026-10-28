@@ -297,6 +297,15 @@ const done = page =>
         by.PANO_ID_0000_R.extra.tags.join() === "Réunion",
       "heading + default tags: country only",
     );
+    // the country tag uses the owner's list (COUNTRY_TAGS); territories not on it keep their English name
+    const tagsOf = await page.evaluate(() =>
+      ["US", "AE", "TR", "CD", "GM", "DE", "PR", "RE"].map(countryTag).join(" | "),
+    );
+    ok(
+      tagsOf ===
+        "USA | UAE | Turkey | Democratic Republic of the Congo | The Gambia | Germany | Puerto Rico | Réunion",
+      "country tags come from the list, territories not on it keep their name: " + tagsOf,
+    );
     ok(
       (await page.isChecked("#tagCountry")) && !(await page.$("#tags")) && !(await page.$("#tagName")),
       "country tag on by default; kind and name tag options are gone",
