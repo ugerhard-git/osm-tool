@@ -165,6 +165,47 @@ const COUNTRY_WEIGHT = {
 const countryWeight = c => COUNTRY_WEIGHT[c] || 1;
 /* Total weight of a list of country codes. */
 const weightOf = codes => codes.reduce((n, c) => n + countryWeight(c), 0);
+/* The value of the country tag ("Tag each location with its country") for each country code, from the
+   owner's list. A code that is not listed (mostly territories, such as Puerto Rico) is tagged with its
+   English name, as the browser gives it (countryName). */
+// prettier-ignore
+const COUNTRY_TAGS = {
+  AD: "Andorra", AE: "UAE", AF: "Afghanistan", AG: "Antigua and Barbuda", AL: "Albania", AM: "Armenia",
+  AO: "Angola", AR: "Argentina", AT: "Austria", AU: "Australia", AZ: "Azerbaijan",
+  BA: "Bosnia and Herzegovina", BB: "Barbados", BD: "Bangladesh", BE: "Belgium", BF: "Burkina Faso",
+  BG: "Bulgaria", BH: "Bahrain", BI: "Burundi", BJ: "Benin", BN: "Brunei", BO: "Bolivia", BR: "Brazil",
+  BS: "Bahamas", BT: "Bhutan", BW: "Botswana", BY: "Belarus", BZ: "Belize", CA: "Canada",
+  CD: "Democratic Republic of the Congo", CF: "Central African Republic", CG: "Congo",
+  CH: "Switzerland", CI: "Côte d'Ivoire", CL: "Chile", CM: "Cameroon", CN: "China", CO: "Colombia",
+  CR: "Costa Rica", CU: "Cuba", CV: "Cabo Verde", CY: "Cyprus", CZ: "Czechia", DE: "Germany",
+  DJ: "Djibouti", DK: "Denmark", DM: "Dominica", DO: "Dominican Republic", DZ: "Algeria",
+  EC: "Ecuador", EE: "Estonia", EG: "Egypt", ER: "Eritrea", ES: "Spain", ET: "Ethiopia", FI: "Finland",
+  FJ: "Fiji", FM: "Micronesia", FR: "France", GA: "Gabon", GB: "United Kingdom", GD: "Grenada",
+  GE: "Georgia", GH: "Ghana", GM: "The Gambia", GN: "Guinea", GQ: "Equatorial Guinea", GR: "Greece",
+  GT: "Guatemala", GW: "Guinea-Bissau", GY: "Guyana", HK: "Hong Kong", HN: "Honduras", HR: "Croatia",
+  HT: "Haiti", HU: "Hungary", ID: "Indonesia", IE: "Ireland", IL: "Israel", IN: "India", IQ: "Iraq",
+  IR: "Iran", IS: "Iceland", IT: "Italy", JM: "Jamaica", JO: "Jordan", JP: "Japan", KE: "Kenya",
+  KG: "Kyrgyzstan", KH: "Cambodia", KI: "Kiribati", KM: "Comoros", KN: "Saint Kitts and Nevis",
+  KP: "North Korea", KR: "South Korea", KW: "Kuwait", KZ: "Kazakhstan", LA: "Laos", LB: "Lebanon",
+  LC: "Saint Lucia", LI: "Liechtenstein", LK: "Sri Lanka", LR: "Liberia", LS: "Lesotho",
+  LT: "Lithuania", LU: "Luxembourg", LV: "Latvia", LY: "Libya", MA: "Morocco", MC: "Monaco",
+  MD: "Moldova", ME: "Montenegro", MG: "Madagascar", MH: "Marshall Islands", MK: "North Macedonia",
+  ML: "Mali", MM: "Myanmar", MN: "Mongolia", MR: "Mauritania", MT: "Malta", MU: "Mauritius",
+  MV: "Maldives", MW: "Malawi", MX: "Mexico", MY: "Malaysia", MZ: "Mozambique", NA: "Namibia",
+  NE: "Niger", NG: "Nigeria", NI: "Nicaragua", NL: "Netherlands", NO: "Norway", NP: "Nepal",
+  NR: "Nauru", NZ: "New Zealand", OM: "Oman", PA: "Panama", PE: "Peru", PG: "Papua New Guinea",
+  PH: "Philippines", PK: "Pakistan", PL: "Poland", PS: "Palestine", PT: "Portugal", PW: "Palau",
+  PY: "Paraguay", QA: "Qatar", RO: "Romania", RS: "Serbia", RU: "Russia", RW: "Rwanda",
+  SA: "Saudi Arabia", SB: "Solomon Islands", SC: "Seychelles", SD: "Sudan", SE: "Sweden",
+  SG: "Singapore", SI: "Slovenia", SK: "Slovakia", SL: "Sierra Leone", SM: "San Marino", SN: "Senegal",
+  SO: "Somalia", SR: "Suriname", SS: "South Sudan", ST: "Sao Tome and Principe", SV: "El Salvador",
+  SY: "Syria", SZ: "Eswatini", TD: "Chad", TG: "Togo", TH: "Thailand", TJ: "Tajikistan",
+  TL: "Timor-Leste", TM: "Turkmenistan", TN: "Tunisia", TO: "Tonga", TR: "Turkey",
+  TT: "Trinidad and Tobago", TV: "Tuvalu", TW: "Taiwan", TZ: "Tanzania", UA: "Ukraine", UG: "Uganda",
+  US: "USA", UY: "Uruguay", UZ: "Uzbekistan", VA: "Vatican City",
+  VC: "Saint Vincent and the Grenadines", VE: "Venezuela", VN: "Vietnam", VU: "Vanuatu", WS: "Samoa",
+  XK: "Kosovo", YE: "Yemen", ZA: "South Africa", ZM: "Zambia", ZW: "Zimbabwe",
+};
 const TOO_MANY = 150000; // above this many places worldwide, the user must choose countries
 const MIN_USES = 3; // live tag suggestions used fewer times than this are hidden
 const MAX_DOTS = 4000; // faint candidate dots drawn on the map
@@ -226,6 +267,8 @@ const countryName = c => {
     return c;
   }
 };
+/* The value of the country tag for a country code: the listed one, or else the English name. */
+const countryTag = c => (Object.hasOwn(COUNTRY_TAGS, c) ? COUNTRY_TAGS[c] : countryName(c));
 /* The country or territory at a position, from the country-coder library built into the page (offline,
    with simplified borders). Used for places whose OpenStreetMap answer does not say, such as a
    whole-world search or an own result. Territory level, so Réunion is RE rather than France. Returns
@@ -3395,7 +3438,7 @@ async function startSearch(reuse) {
     let next = 0,
       lastPaint = 0;
     const tagList = loc => [
-      ...(addCountry && loc.poi.cc ? [countryName(loc.poi.cc)] : []),
+      ...(addCountry && loc.poi.cc ? [countryTag(loc.poi.cc)] : []),
       ...(addRoad && loc.road === "has"
         ? ["Has road name"]
         : addRoad && loc.road === "none"
