@@ -38,7 +38,7 @@
  *
  * SAVED IN THE BROWSER (localStorage, each name starts with "lookout2.", see `store`)
  *   kinds (formerly one "kind", moved over on load), nameHas, lang, countries, regions, scope, maxDist, minDist,
- *   target, official, tagCountry, tagRoad,
+ *   target, official, tagCountry, territoryTag (how territories are tagged: "both", "own" or "parent"), tagRoad,
  *   expert (whether that panel is open), expertPart (its section used last), ownQuery (the text of
  *   your own query), ownQueryAuto (check Street View right after your own query), welcomed
  *   (first-visit dialog seen), history (the last 20 searches, see "history of searches"; never a key
@@ -206,6 +206,16 @@ const COUNTRY_TAGS = {
   VC: "Saint Vincent and the Grenadines", VE: "Venezuela", VN: "Vietnam", VU: "Vanuatu", WS: "Samoa",
   XK: "Kosovo", YE: "Yemen", ZA: "South Africa", ZM: "Zambia", ZW: "Zimbabwe",
 };
+/* The country each territory belongs to, for its country tag (see territoryTag). Western Sahara, whose
+   status is disputed, has none and keeps only its own name. */
+// prettier-ignore
+const TERRITORY_OF = {
+  AI: "GB", AS: "US", AW: "NL", AX: "FI", BL: "FR", BM: "GB", BQ: "NL", CC: "AU", CK: "NZ", CW: "NL",
+  CX: "AU", FK: "GB", FO: "DK", GF: "FR", GG: "GB", GI: "GB", GL: "DK", GP: "FR", GS: "GB", GU: "US",
+  IM: "GB", IO: "GB", JE: "GB", KY: "GB", MF: "FR", MO: "CN", MP: "US", MQ: "FR", MS: "GB", NC: "FR",
+  NF: "AU", NU: "NZ", PF: "FR", PM: "FR", PN: "GB", PR: "US", RE: "FR", SH: "GB", SJ: "NO", SX: "NL",
+  TC: "GB", TK: "NZ", VG: "GB", VI: "US", WF: "FR", YT: "FR",
+};
 const TOO_MANY = 150000; // above this many places worldwide, the user must choose countries
 const MIN_USES = 3; // live tag suggestions used fewer times than this are hidden
 const MAX_DOTS = 4000; // faint candidate dots drawn on the map
@@ -269,6 +279,16 @@ const countryName = c => {
 };
 /* The value of the country tag for a country code: the listed one, or else the English name. */
 const countryTag = c => (Object.hasOwn(COUNTRY_TAGS, c) ? COUNTRY_TAGS[c] : countryName(c));
+/* The country tags for a place's country code. A territory (Puerto Rico) gets its own name, its country's
+   tag (USA), or both, as chosen under "Tag territories with" in the last step: "both", "own" or "parent". */
+function countryTags(c, territories = "both") {
+  const parent = Object.hasOwn(TERRITORY_OF, c) ? TERRITORY_OF[c] : "";
+  if (!parent || territories === "own") return [countryTag(c)];
+  if (territories === "parent") return [countryTag(parent)];
+  return [countryTag(c), countryTag(parent)];
+}
+/* "both", "own" or "parent"; anything else (an old or edited value) counts as "both". */
+const territoryValue = v => (["own", "parent"].includes(v) ? v : "both");
 /* The country or territory at a position, from the country-coder library built into the page (offline,
    with simplified borders). Used for places whose OpenStreetMap answer does not say, such as a
    whole-world search or an own result. Territory level, so Réunion is RE rather than France. Returns
@@ -1233,6 +1253,7 @@ for (const [id, fallback] of [
 }
 $("official").checked = store.get("official", true);
 $("tagCountry").checked = store.get("tagCountry", true);
+$("territoryTag").value = territoryValue(store.get("territoryTag", "both"));
 $("tagRoad").checked = store.get("tagRoad", false);
 {
   const s = scopeValue(store.get("scope", "pick")) || "pick";
@@ -1436,6 +1457,8 @@ let ownResult = null; // { places, noPosition, lines, worked, hasCc, countries, 
    position); only an own result where no place could be placed in a country has none. */
 function updateCountryTag() {
   const off = !!ownResult && !ownResult.hasCc;
+  // "Territories" only matters while countries are tagged.
+  $("territoryRow").hidden = off || !$("tagCountry").checked;
   $("tagCountry").disabled = off;
   $("tagCountryRow").classList.toggle("off", off);
   const h = $("tagCountryHint");
@@ -1448,6 +1471,7 @@ function updateCountryTag() {
     );
   }
 }
+$("tagCountry").onchange = updateCountryTag;
 /* Number of the settings step, which moves up when an own result replaces steps 1 and 2. */
 const lastStep = () => (ownResult ? 2 : 3);
 function emptyText(title, body) {
@@ -1728,6 +1752,7 @@ function searchParams() {
   q.set("t", $("target").value);
   if (!$("official").checked) q.set("o", "0");
   if (!$("tagCountry").checked) q.set("gc", "0");
+  if (territoryValue($("territoryTag").value) !== "both") q.set("gt", $("territoryTag").value);
   if ($("tagRoad").checked) q.set("gr", "1");
   const mn = $("mapName").value.trim();
   if (mn) q.set("name", mn);
@@ -1791,6 +1816,8 @@ function applyParams(q, onlyStep3 = false) {
   if (!q.has("m")) $("minDist").value = 0;
   $("official").checked = q.get("o") !== "0";
   $("tagCountry").checked = q.get("gc") !== "0";
+  $("territoryTag").value = territoryValue(q.get("gt"));
+  updateCountryTag();
   $("tagRoad").checked = q.get("gr") === "1";
   $("mapName").value = cleanText(q.get("name"), 100);
 }
@@ -3250,6 +3277,7 @@ async function startSearch(reuse) {
   const target = fieldNumber("target", 1000);
   const official = $("official").checked,
     addCountry = $("tagCountry").checked,
+    territories = territoryValue($("territoryTag").value),
     addRoad = $("tagRoad").checked;
   const sc = scope(),
     label = ownRun ? ownRun.label : searchLabel();
@@ -3284,6 +3312,7 @@ async function startSearch(reuse) {
   for (const id of ["maxDist", "minDist", "target"]) store.set(id, $(id).value);
   store.set("official", official);
   store.set("tagCountry", addCountry);
+  store.set("territoryTag", territories);
   store.set("tagRoad", addRoad);
   if (!GOOGLE_API_KEY) keyStore.set(key);
 
@@ -3438,7 +3467,7 @@ async function startSearch(reuse) {
     let next = 0,
       lastPaint = 0;
     const tagList = loc => [
-      ...(addCountry && loc.poi.cc ? [countryTag(loc.poi.cc)] : []),
+      ...(addCountry && loc.poi.cc ? countryTags(loc.poi.cc, territories) : []),
       ...(addRoad && loc.road === "has"
         ? ["Has road name"]
         : addRoad && loc.road === "none"

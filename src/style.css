@@ -402,6 +402,14 @@ a:focus-visible {
 .check.off > span {
   color: var(--muted);
 }
+/* A setting that belongs to the tick box above it, indented under its text */
+.subfield {
+  margin: 8px 0 0 28px;
+}
+.subfield label {
+  font-weight: 400;
+  font-size: 0.92rem;
+}
 .check input {
   width: 18px;
   height: 18px;
