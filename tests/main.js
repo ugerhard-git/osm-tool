@@ -294,17 +294,35 @@ const done = page =>
     ok(
       Math.abs(by.PANO_ID_0000_D.heading - 90) < 0.5 &&
         by.PANO_ID_0000_A.extra.tags.join() === "Malta" &&
-        by.PANO_ID_0000_R.extra.tags.join() === "Réunion",
-      "heading + default tags: country only",
+        by.PANO_ID_0000_R.extra.tags.join() === "Réunion,France",
+      "heading + default tags: country only; a territory gets its own name and its country",
     );
-    // the country tag uses the owner's list (COUNTRY_TAGS); territories not on it keep their English name
+    // the country tag uses the owner's list (COUNTRY_TAGS); territories not on it are named in English
     const tagsOf = await page.evaluate(() =>
       ["US", "AE", "TR", "CD", "GM", "DE", "PR", "RE"].map(countryTag).join(" | "),
     );
     ok(
       tagsOf ===
         "USA | UAE | Turkey | Democratic Republic of the Congo | The Gambia | Germany | Puerto Rico | Réunion",
-      "country tags come from the list, territories not on it keep their name: " + tagsOf,
+      "country tags come from the list, territories not on it are named in English: " + tagsOf,
+    );
+    // territories: their own name and their country by default, or one of the two (TERRITORY_OF)
+    const terr = await page.evaluate(() =>
+      [
+        countryTags("PR"),
+        countryTags("PR", "own"),
+        countryTags("PR", "parent"),
+        countryTags("MO", "parent"),
+        countryTags("EH"),
+        countryTags("DE", "parent"),
+        countryTags("HK"),
+      ]
+        .map(t => t.join("+"))
+        .join(" | "),
+    );
+    ok(
+      terr === "Puerto Rico+USA | Puerto Rico | USA | China | Western Sahara | Germany | Hong Kong",
+      "territories: both names, own only, country only; countries and Hong Kong unchanged: " + terr,
     );
     ok(
       (await page.isChecked("#tagCountry")) && !(await page.$("#tags")) && !(await page.$("#tagName")),
@@ -483,7 +501,10 @@ const done = page =>
       const cc = Object.fromEntries(w.customCoordinates.map(c => [c.panoId, c.countryCode]));
       ok(
         /\(World\)$/.test(w.name) &&
-          w.customCoordinates.every(c => c.countryCode && c.extra.tags.length === 1) &&
+          w.customCoordinates.every(
+            c =>
+              c.countryCode && c.extra.tags.join() === (c.countryCode === "RE" ? "Réunion,France" : "Malta"),
+          ) &&
           cc.PANO_ID_0000_A === "MT" &&
           cc.PANO_ID_0000_R === "RE",
         "world: every location gets its country from its position (Réunion as RE): " + JSON.stringify(cc),

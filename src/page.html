@@ -411,6 +411,15 @@
               ><input type="checkbox" id="tagCountry" checked /><span
                 >Tag each location with its country<span class="hint" id="tagCountryHint" hidden></span></span
             ></label>
+            <!-- How territories are tagged, shown while countries are tagged (app.js: countryTags) -->
+            <div class="subfield" id="territoryRow">
+              <label for="territoryTag">Tag territories with</label>
+              <select id="territoryTag">
+                <option value="both">Both: Puerto Rico and USA</option>
+                <option value="own">Their own name: Puerto Rico</option>
+                <option value="parent">Their country: USA</option>
+              </select>
+            </div>
             <label class="check"
               ><input type="checkbox" id="tagRoad" /><span
                 >Tag each location with "Has road name" or "No road name"<br /><span class="hint"
